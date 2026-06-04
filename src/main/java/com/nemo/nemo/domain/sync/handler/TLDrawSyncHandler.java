@@ -1,7 +1,7 @@
 package com.nemo.nemo.domain.sync.handler;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import com.nemo.nemo.domain.sync.dto.ClientMessage;
 import com.nemo.nemo.domain.sync.dto.ServerMessage;
 import com.nemo.nemo.domain.sync.service.ClockManager;
 import com.nemo.nemo.domain.sync.service.DocumentStore;
@@ -15,6 +15,9 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +48,7 @@ public class TLDrawSyncHandler extends TextWebSocketHandler {
         String albumId = (String) session.getAttributes().get("albumId");
         String userId = (String) session.getAttributes().get("userId");
         roomManager.join(albumId, session);
+        startKeepAlive(session);
         log.info("WebSocket connected: sessionId={}, albumId={}, userId={}", session.getId(), albumId, userId);
     }
 
@@ -52,74 +56,126 @@ public class TLDrawSyncHandler extends TextWebSocketHandler {
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String albumId = (String) session.getAttributes().get("albumId");
         String userId = (String) session.getAttributes().get("userId");
+        String payload = message.getPayload();
 
-        ClientMessage msg;
+        // TLDraw may chunk large messages (prefix: "N_data"). Skip partial chunks silently.
+        if (!payload.startsWith("{")) {
+            log.debug("Skipping non-JSON frame: {}", payload.substring(0, Math.min(40, payload.length())));
+            return;
+        }
+
+        JsonNode root;
         try {
-            msg = objectMapper.readValue(message.getPayload(), ClientMessage.class);
+            root = objectMapper.readTree(payload);
         } catch (Exception e) {
-            sendMessage(session, ServerMessage.error("invalid message format"));
+            log.debug("Failed to parse message: {}", e.getMessage());
             return;
         }
 
-        if (msg.getType() == null) {
-            sendMessage(session, ServerMessage.error("missing type field"));
-            return;
-        }
+        String type = root.path("type").asText(null);
+        if (type == null) return;
 
-        switch (msg.getType()) {
-            case "connect" -> handleConnect(session, albumId, userId, msg);
-            case "push" -> handlePush(session, albumId, msg);
-            case "ping" -> handlePing(session);
-            default -> sendMessage(session, ServerMessage.error("unknown message type: " + msg.getType()));
+        log.debug("handleTextMessage: sessionId={}, albumId={}, type={}", session.getId(), albumId, type);
+        switch (type) {
+            case "connect" -> handleConnect(session, albumId, userId, root);
+            case "push" -> handlePush(session, albumId, root);
+            case "ping" -> sendMessage(session, ServerMessage.pong());
+            default -> log.debug("Unknown message type: {}", type);
         }
     }
 
-    private void handleConnect(WebSocketSession session, String albumId, String userId, ClientMessage msg) {
+    private void handleConnect(WebSocketSession session, String albumId, String userId, JsonNode root) {
         Map<String, Object> state = albumStates.computeIfAbsent(albumId, documentStore::load);
         long serverClock = clockManager.get(albumId);
-        sendMessage(session, ServerMessage.connect(serverClock, "entire_document", state));
-        resetPingTimer(session);
-        log.debug("connect handled: sessionId={}, albumId={}, serverClock={}", session.getId(), albumId, serverClock);
+
+        // TLDraw NetworkDiff format: {recordId → ["put", record]}
+        Map<String, Object> connectDiff = new HashMap<>(state.size());
+        for (Map.Entry<String, Object> entry : state.entrySet()) {
+            connectDiff.put(entry.getKey(), List.of("put", entry.getValue()));
+        }
+
+        String connectRequestId = root.has("connectRequestId") ? root.get("connectRequestId").asText() : null;
+        Map<String, Object> schema = root.has("schema") && root.get("schema").isObject()
+                ? nodeToMap(root.get("schema")) : null;
+
+        sendMessage(session, ServerMessage.connect(serverClock, connectDiff, connectRequestId, schema));
+        log.debug("connect handled: sessionId={}, albumId={}, serverClock={}, shapes={}", session.getId(), albumId, serverClock, state.size());
     }
 
-    private void handlePush(WebSocketSession session, String albumId, ClientMessage msg) {
+    private void handlePush(WebSocketSession session, String albumId, JsonNode root) {
         Map<String, Object> state = albumStates.computeIfAbsent(albumId, documentStore::load);
+        long newClock = clockManager.get(albumId);
 
-        if (msg.getDiff() != null) {
-            documentStore.applyDiff(albumId, state, msg.getDiff());
-            long newClock = clockManager.increment(albumId);
-            broadcast(albumId, session, ServerMessage.patch(newClock, msg.getDiff()));
+        JsonNode diffNode = root.get("diff");
+        if (diffNode != null && diffNode.isObject() && !diffNode.isEmpty()) {
+            Map<String, Object> diff = diffNodeToMap(diffNode);
+            documentStore.applyDiff(albumId, state, diff);
+            newClock = clockManager.increment(albumId);
+            broadcast(albumId, session, ServerMessage.patch(newClock, diff));
+            log.debug("[handlePush] applied diff, newClock={}, stateSize={}", newClock, state.size());
         }
 
-        if (msg.getPresence() != null) {
+        long clientClock = root.has("clientClock") ? root.get("clientClock").longValue() : 0L;
+        sendMessage(session, ServerMessage.pushResult(clientClock, newClock));
+
+        JsonNode presenceNode = root.get("presence");
+        if (presenceNode != null && presenceNode.isObject() && !presenceNode.isEmpty()) {
             Set<WebSocketSession> sessions = roomManager.getSessions(albumId);
-            presenceManager.broadcast(albumId, session.getId(), msg.getPresence(), sessions);
+            presenceManager.broadcast(albumId, session.getId(), nodeToMap(presenceNode), sessions);
         }
-
-        resetPingTimer(session);
     }
 
-    private void handlePing(WebSocketSession session) {
-        sendMessage(session, ServerMessage.pong());
-        resetPingTimer(session);
+    /** Convert a JsonNode representing a TLDraw NetworkDiff object to Map<String, Object>.
+     *  Each entry value is an array [opType, record?] → List<Object>. */
+    private Map<String, Object> diffNodeToMap(JsonNode diffNode) {
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<String, JsonNode> entry : diffNode.properties()) {
+            JsonNode val = entry.getValue();
+            result.put(entry.getKey(), val.isArray() ? nodeToList(val) : nodeToValue(val));
+        }
+        return result;
     }
 
-    private void resetPingTimer(WebSocketSession session) {
-        ScheduledFuture<?> existing = pingTimers.remove(session.getId());
-        if (existing != null) {
-            existing.cancel(false);
+    private List<Object> nodeToList(JsonNode arrayNode) {
+        List<Object> list = new ArrayList<>(arrayNode.size());
+        for (JsonNode item : arrayNode) {
+            list.add(nodeToValue(item));
         }
+        return list;
+    }
 
-        ScheduledFuture<?> future = scheduler.schedule(() -> {
-            if (session.isOpen()) {
-                try {
-                    log.warn("Ping timeout, closing session: {}", session.getId());
-                    session.close(CloseStatus.SESSION_NOT_RELIABLE);
-                } catch (Exception ignored) {}
-            }
-        }, 30, TimeUnit.SECONDS);
+    private Map<String, Object> nodeToMap(JsonNode objectNode) {
+        Map<String, Object> map = new HashMap<>();
+        for (Map.Entry<String, JsonNode> entry : objectNode.properties()) {
+            map.put(entry.getKey(), nodeToValue(entry.getValue()));
+        }
+        return map;
+    }
 
-        pingTimers.put(session.getId(), future);
+    private Object nodeToValue(JsonNode node) {
+        if (node.isTextual()) return node.asText();
+        if (node.isBoolean()) return node.booleanValue();
+        if (node.isNull()) return null;
+        if (node.isArray()) return nodeToList(node);
+        if (node.isObject()) return nodeToMap(node);
+        if (node.isIntegralNumber()) return node.longValue();
+        if (node.isFloatingPointNumber()) return node.doubleValue();
+        return node.asText();
+    }
+
+    /** Server-initiated keep-alive: send JSON {"type":"pong"} every 30s */
+    private void startKeepAlive(WebSocketSession session) {
+        ScheduledFuture<?> existing = pingTimers.put(session.getId(),
+            scheduler.scheduleAtFixedRate(() -> {
+                if (!session.isOpen()) {
+                    ScheduledFuture<?> f = pingTimers.remove(session.getId());
+                    if (f != null) f.cancel(false);
+                    return;
+                }
+                sendMessage(session, ServerMessage.pong());
+            }, 30, 30, TimeUnit.SECONDS)
+        );
+        if (existing != null) existing.cancel(false);
     }
 
     @Override

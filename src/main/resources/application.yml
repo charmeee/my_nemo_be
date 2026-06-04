@@ -78,3 +78,7 @@ springdoc:
   api-docs:
     path: /api-docs
   default-produces-media-type: application/json
+
+logging:
+  level:
+    com.nemo.nemo.domain.sync: DEBUG
