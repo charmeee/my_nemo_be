@@ -1,0 +1,120 @@
+package com.nemo.nemo.domain.auth.controller;
+
+import com.nemo.nemo.common.dto.ApiResponse;
+import com.nemo.nemo.common.exception.ErrorCode;
+import com.nemo.nemo.common.exception.NemoException;
+import com.nemo.nemo.config.AppProperties;
+import com.nemo.nemo.config.JwtProperties;
+import com.nemo.nemo.domain.auth.dto.MemberResponse;
+import com.nemo.nemo.domain.auth.dto.RefreshResponse;
+import com.nemo.nemo.domain.auth.service.JwtTokenService;
+import com.nemo.nemo.domain.auth.service.RefreshTokenService;
+import com.nemo.nemo.domain.member.entity.Member;
+import com.nemo.nemo.domain.member.repository.MemberRepository;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Arrays;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    private final JwtTokenService jwtTokenService;
+    private final RefreshTokenService refreshTokenService;
+    private final MemberRepository memberRepository;
+    private final JwtProperties jwtProperties;
+    private final AppProperties appProperties;
+
+    public AuthController(JwtTokenService jwtTokenService,
+                          RefreshTokenService refreshTokenService,
+                          MemberRepository memberRepository,
+                          JwtProperties jwtProperties,
+                          AppProperties appProperties) {
+        this.jwtTokenService = jwtTokenService;
+        this.refreshTokenService = refreshTokenService;
+        this.memberRepository = memberRepository;
+        this.jwtProperties = jwtProperties;
+        this.appProperties = appProperties;
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<RefreshResponse> refresh(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = extractCookie(request, "refreshToken");
+        if (refreshToken == null) {
+            throw new NemoException(ErrorCode.REFRESH_TOKEN_NOT_FOUND);
+        }
+
+        String userId = jwtTokenService.extractSubject(refreshToken);
+        if (userId == null) {
+            throw new NemoException(ErrorCode.INVALID_TOKEN);
+        }
+
+        String stored = refreshTokenService.find(userId)
+                .orElseThrow(() -> new NemoException(ErrorCode.REFRESH_TOKEN_NOT_FOUND));
+
+        if (!stored.equals(refreshToken)) {
+            throw new NemoException(ErrorCode.INVALID_TOKEN);
+        }
+
+        String newAccessToken = jwtTokenService.generateAccessToken(userId);
+        return ApiResponse.ok(new RefreshResponse(newAccessToken, jwtProperties.getAccessExpSec()));
+    }
+
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String accessToken = authHeader.substring(7);
+            String jti = jwtTokenService.extractJti(accessToken);
+            String userId = jwtTokenService.extractSubject(accessToken);
+            if (jti != null) {
+                long remaining = jwtTokenService.getRemainingSeconds(accessToken);
+                refreshTokenService.blacklistAccessToken(jti, remaining);
+            }
+            if (userId != null) {
+                refreshTokenService.delete(userId);
+            }
+        }
+
+        ResponseCookie expiredCookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(appProperties.getCookie().isSecure())
+                .path("/")
+                .maxAge(0)
+                .sameSite(appProperties.getCookie().getSameSite())
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
+
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/me")
+    public ApiResponse<MemberResponse> me(@AuthenticationPrincipal String userId) {
+        Member member = memberRepository.findById(UUID.fromString(userId))
+                .orElseThrow(() -> new NemoException(ErrorCode.MEMBER_NOT_FOUND));
+
+        MemberResponse body = new MemberResponse(
+                member.getId().toString(),
+                member.getEmail(),
+                member.getNickname(),
+                member.getProfileImage()
+        );
+        return ApiResponse.ok(body);
+    }
+
+    private String extractCookie(HttpServletRequest request, String name) {
+        if (request.getCookies() == null) return null;
+        return Arrays.stream(request.getCookies())
+                .filter(c -> name.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+}

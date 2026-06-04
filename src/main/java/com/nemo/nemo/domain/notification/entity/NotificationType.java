@@ -1,0 +1,7 @@
+package com.nemo.nemo.domain.notification.entity;
+
+public enum NotificationType {
+    NEW_MEMBER_JOINED, ALBUM_INVITATION, JOIN_REQUEST,
+    JOIN_APPROVED, JOIN_REJECTED, NEW_PAGE_ADDED,
+    ALBUM_UPDATED, MEMBER_LEFT, ROLE_CHANGED, ALBUM_LOCKED
+}
