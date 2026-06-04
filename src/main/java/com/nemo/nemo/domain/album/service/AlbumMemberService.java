@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
+
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -27,9 +29,12 @@ public class AlbumMemberService {
 
     private final AlbumMemberRepository albumMemberRepository;
     private final MemberRepository memberRepository;
+    private final com.nemo.nemo.domain.album.repository.AlbumRepository albumRepository;
     private final SessionGuard sessionGuard;
     @Lazy
     private final NotificationService notificationService;
+    @Lazy
+    private final com.nemo.nemo.domain.trash.service.TrashService trashService;
 
     public List<MemberResponse> getMembers(UUID albumId, UUID requesterId) {
         getMemberOrThrow(albumId, requesterId);
@@ -95,6 +100,13 @@ public class AlbumMemberService {
         AlbumMember target = getMemberOrThrow(albumId, targetUserId);
         sessionGuard.forceClose(albumId.toString(), targetUserId.toString(), "kicked");
         albumMemberRepository.delete(target);
+
+        if (albumMemberRepository.countByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE) == 0) {
+            albumRepository.findById(albumId).ifPresent(album -> {
+                album.softDelete();
+                trashService.addAlbumToTrash(albumId, requesterId);
+            });
+        }
     }
 
     @Transactional
@@ -115,6 +127,13 @@ public class AlbumMemberService {
         if (adminId != null) {
             notificationService.send(adminId, NotificationType.MEMBER_LEFT,
                     Map.of("albumId", albumId.toString(), "userId", userId.toString()));
+        }
+
+        if (albumMemberRepository.countByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE) == 0) {
+            albumRepository.findById(albumId).ifPresent(album -> {
+                album.softDelete();
+                trashService.addAlbumToTrash(albumId, userId);
+            });
         }
     }
 

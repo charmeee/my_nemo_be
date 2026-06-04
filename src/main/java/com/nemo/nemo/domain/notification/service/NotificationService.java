@@ -12,7 +12,6 @@ import com.nemo.nemo.domain.notification.entity.NotificationType;
 import com.nemo.nemo.domain.notification.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +32,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class NotificationService {
 
     private static final long SSE_TIMEOUT = 30 * 60 * 1000L;
-    private static final int MAX_NOTIFICATIONS = 100;
 
     private final NotificationRepository notificationRepository;
     private final MemberRepository memberRepository;
@@ -107,12 +105,16 @@ public class NotificationService {
     }
 
     public List<NotificationResponse> getNotifications(String userId) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(
+        return notificationRepository.findRecentByUserId(
                         UUID.fromString(userId),
-                        PageRequest.of(0, MAX_NOTIFICATIONS))
+                        java.time.LocalDateTime.now().minusDays(90))
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public long getUnreadCount(String userId) {
+        return notificationRepository.countByUserIdAndIsReadFalse(UUID.fromString(userId));
     }
 
     @Transactional

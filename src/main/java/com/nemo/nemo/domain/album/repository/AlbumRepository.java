@@ -11,9 +11,10 @@ import java.util.UUID;
 
 public interface AlbumRepository extends JpaRepository<Album, UUID> {
 
-    List<Album> findByCreatorIdAndDeletedAtIsNull(UUID creatorId);
+    @Query("SELECT a FROM Album a WHERE a.creatorId = :creatorId AND a.deletedAt IS NULL ORDER BY a.updatedAt DESC")
+    List<Album> findByCreatorIdAndDeletedAtIsNull(@Param("creatorId") UUID creatorId);
 
-    @Query("SELECT a FROM Album a JOIN AlbumMember am ON am.album.id = a.id WHERE am.user.id = :userId AND am.status = 'ACTIVE' AND a.deletedAt IS NULL")
+    @Query("SELECT a FROM Album a JOIN AlbumMember am ON am.album.id = a.id WHERE am.user.id = :userId AND am.status = 'ACTIVE' AND a.deletedAt IS NULL ORDER BY a.updatedAt DESC")
     List<Album> findAlbumsByMemberId(@Param("userId") UUID userId);
 
     @Modifying

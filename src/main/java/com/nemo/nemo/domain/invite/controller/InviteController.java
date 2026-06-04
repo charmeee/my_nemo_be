@@ -41,6 +41,14 @@ public class InviteController {
         return ResponseEntity.ok(ApiResponse.ok());
     }
 
+    @PostMapping("/albums/{albumId}/invite/reissue")
+    public ResponseEntity<ApiResponse<InviteLinkResponse>> reissueInviteLink(
+            @PathVariable UUID albumId,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                inviteService.reissueInviteLink(albumId, UUID.fromString(userId))));
+    }
+
     @PatchMapping("/albums/{albumId}/invite/{linkId}")
     public ResponseEntity<ApiResponse<Void>> toggleInviteLink(
             @PathVariable UUID albumId,

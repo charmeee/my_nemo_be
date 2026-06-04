@@ -65,11 +65,15 @@ public class InviteService {
         }
 
         Album album = link.getAlbum();
+        String inviterNickname = memberRepository.findById(album.getCreatorId())
+                .map(m -> m.getNickname())
+                .orElse(null);
         return new InviteInfoResponse(
                 album.getId().toString(),
                 album.getName(),
                 link.getRole().name(),
-                link.isApprovalRequired()
+                link.isApprovalRequired(),
+                inviterNickname
         );
     }
 
@@ -108,6 +112,28 @@ public class InviteService {
                         "memberId", userId.toString()
                 )
         );
+    }
+
+    @Transactional
+    public InviteLinkResponse reissueInviteLink(UUID albumId, UUID userId) {
+        albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, userId)
+                .filter(am -> am.getRole() == AlbumRole.ADMIN)
+                .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_ADMIN_REQUIRED));
+
+        Album album = albumRepository.findById(albumId)
+                .filter(a -> a.getDeletedAt() == null)
+                .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_NOT_FOUND));
+
+        // 기존 활성 링크 모두 비활성화
+        inviteLinkRepository.findByAlbumId(albumId).stream()
+                .filter(InviteLink::isActive)
+                .forEach(InviteLink::deactivate);
+
+        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        InviteLink link = InviteLink.create(album, AlbumRole.EDITOR, false, code);
+        inviteLinkRepository.save(link);
+
+        return toResponse(link);
     }
 
     @Transactional

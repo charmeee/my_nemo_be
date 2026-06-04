@@ -39,6 +39,12 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.ok());
     }
 
+    @GetMapping("/unread-count")
+    public ResponseEntity<ApiResponse<Long>> getUnreadCount(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.ok(notificationService.getUnreadCount(userId)));
+    }
+
     @PatchMapping("/read-all")
     public ResponseEntity<ApiResponse<Void>> markAllRead(
             @AuthenticationPrincipal String userId) {
