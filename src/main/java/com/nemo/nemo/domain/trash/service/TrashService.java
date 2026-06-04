@@ -6,8 +6,11 @@ import com.nemo.nemo.common.exception.ErrorCode;
 import com.nemo.nemo.common.exception.NemoException;
 import com.nemo.nemo.domain.album.entity.Album;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
+import com.nemo.nemo.domain.image.entity.Image;
+import com.nemo.nemo.domain.image.repository.ImageRepository;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.page.entity.AlbumPage;
 import com.nemo.nemo.domain.page.repository.AlbumPageRepository;
 import com.nemo.nemo.domain.trash.dto.TrashResponse;
 import com.nemo.nemo.domain.trash.entity.Trash;
@@ -18,6 +21,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -32,6 +38,7 @@ public class TrashService {
     private final TrashRepository trashRepository;
     private final AlbumRepository albumRepository;
     private final AlbumPageRepository albumPageRepository;
+    private final ImageRepository imageRepository;
     private final MemberRepository memberRepository;
     private final ObjectMapper objectMapper;
 
@@ -101,7 +108,17 @@ public class TrashService {
         }
 
         if (trash.getType() == TrashType.ALBUM) {
+            List<Image> images = imageRepository.findByAlbumIdOrderByCreatedAtDesc(trash.getReferenceId());
+            for (Image image : images) {
+                if (image.getFilePath() != null) {
+                    try { Files.deleteIfExists(Paths.get(image.getFilePath())); } catch (IOException ignored) {}
+                }
+            }
+            imageRepository.deleteAll(images);
             albumRepository.deleteById(trash.getReferenceId());
+        } else if (trash.getType() == TrashType.PAGE) {
+            albumPageRepository.findById(trash.getReferenceId())
+                    .ifPresent(albumPageRepository::delete);
         }
 
         trashRepository.delete(trash);

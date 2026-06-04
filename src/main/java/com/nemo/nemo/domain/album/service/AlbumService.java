@@ -11,7 +11,9 @@ import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.trash.service.TrashService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,8 @@ public class AlbumService {
     private final AlbumRepository albumRepository;
     private final AlbumMemberRepository albumMemberRepository;
     private final MemberRepository memberRepository;
+    @Lazy
+    private final TrashService trashService;
 
     public AlbumListResponse getMyAlbums(UUID userId) {
         List<Album> ownedAlbums = albumRepository.findByCreatorIdAndDeletedAtIsNull(userId);
@@ -92,6 +96,7 @@ public class AlbumService {
         requireAdmin(member);
 
         album.softDelete();
+        trashService.addAlbumToTrash(albumId, userId);
     }
 
     private Album getAlbumOrThrow(UUID albumId) {
