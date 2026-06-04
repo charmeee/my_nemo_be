@@ -28,7 +28,7 @@ public class Trash {
     @JoinColumn(name = "deleted_by_id")
     private Member deletedBy;
 
-    @Column(columnDefinition = "jsonb")
+    @Column
     private String originalData;
 
     private LocalDateTime expiresAt;

@@ -26,7 +26,7 @@ public class Notification {
     @Enumerated(EnumType.STRING)
     private NotificationType type;
 
-    @Column(columnDefinition = "jsonb")
+    @Column
     private String payload;
 
     private boolean isRead = false;

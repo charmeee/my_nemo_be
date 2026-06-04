@@ -17,7 +17,7 @@ public class TLDrawDocument {
     @Column(columnDefinition = "uuid")
     private UUID albumId;
 
-    @Column(columnDefinition = "jsonb", nullable = false)
+    @Column(nullable = false)
     private String state;
 
     @Column(nullable = false)

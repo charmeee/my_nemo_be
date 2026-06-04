@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers("/oauth2/**", "/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**").permitAll()
                         .requestMatchers("/files/**").permitAll()
+                        .requestMatchers("/sync/**").permitAll()  // WebSocket: JwtHandshakeInterceptor가 자체 인증
                         .requestMatchers(HttpMethod.GET, "/invite/*/info").permitAll()
                         .anyRequest().authenticated()
                 )
