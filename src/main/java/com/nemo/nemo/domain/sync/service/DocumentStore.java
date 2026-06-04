@@ -1,6 +1,6 @@
 package com.nemo.nemo.domain.sync.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.nemo.nemo.domain.sync.entity.TLDrawDocument;
 import com.nemo.nemo.domain.sync.repository.TLDrawDocumentRepository;
 import lombok.RequiredArgsConstructor;

@@ -1,7 +1,7 @@
 package com.nemo.nemo.domain.notification.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.nemo.nemo.common.exception.ErrorCode;
 import com.nemo.nemo.common.exception.NemoException;
 import com.nemo.nemo.domain.member.entity.Member;
@@ -66,7 +66,7 @@ public class NotificationService {
         String payloadJson;
         try {
             payloadJson = objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new NemoException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
@@ -136,7 +136,7 @@ public class NotificationService {
         Object parsedPayload;
         try {
             parsedPayload = objectMapper.readValue(notification.getPayload(), Object.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             parsedPayload = notification.getPayload();
         }
 

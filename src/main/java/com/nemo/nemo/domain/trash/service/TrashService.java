@@ -1,7 +1,7 @@
 package com.nemo.nemo.domain.trash.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.nemo.nemo.common.exception.ErrorCode;
 import com.nemo.nemo.common.exception.NemoException;
 import com.nemo.nemo.domain.album.entity.Album;
@@ -50,7 +50,7 @@ public class TrashService {
                     "coverImage", album.getCoverImage() != null ? album.getCoverImage() : "",
                     "creatorId", album.getCreatorId() != null ? album.getCreatorId().toString() : ""
             ));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             originalData = "{}";
         }
 

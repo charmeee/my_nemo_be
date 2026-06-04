@@ -1,6 +1,6 @@
 package com.nemo.nemo.domain.sync.handler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.nemo.nemo.domain.sync.dto.ClientMessage;
 import com.nemo.nemo.domain.sync.dto.ServerMessage;
 import com.nemo.nemo.domain.sync.service.ClockManager;
