@@ -10,6 +10,8 @@ import java.util.Map;
 public class ClientMessage {
 
     private String type;
+    private Integer protocolVersion;
+    private String connectRequestId;
     private Long lastServerClock;
     private Long clientClock;
     private Map<String, Object> diff;

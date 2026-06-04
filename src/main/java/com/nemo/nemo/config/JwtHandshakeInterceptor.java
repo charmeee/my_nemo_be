@@ -32,13 +32,13 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
             // JWT: Authorization 헤더 또는 쿼리 파라미터
             String token = extractToken(request);
             if (token == null) {
-                log.warn("WebSocket handshake rejected: no token");
+                log.warn("WebSocket handshake rejected: no token. URI={}", request.getURI());
                 return false;
             }
 
             String userId = jwtTokenService.extractSubject(token);
             if (userId == null) {
-                log.warn("WebSocket handshake rejected: invalid token");
+                log.warn("WebSocket handshake rejected: invalid token. token_prefix={}, uri={}", token.substring(0, Math.min(20, token.length())), request.getURI());
                 return false;
             }
 

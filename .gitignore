@@ -27,3 +27,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Debug configs
+application.properties.debug
