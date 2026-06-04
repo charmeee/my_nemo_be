@@ -89,9 +89,10 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private String extractAlbumId(String path) {
-        // /sync/albums/{albumId}
+        // /sync/albums/{albumId} or /sync/excalidraw/{albumId}
         String[] parts = path.split("/");
-        if (parts.length >= 4 && "sync".equals(parts[1]) && "albums".equals(parts[2])) {
+        if (parts.length >= 4 && "sync".equals(parts[1])
+                && ("albums".equals(parts[2]) || "excalidraw".equals(parts[2]))) {
             return parts[3];
         }
         return null;
