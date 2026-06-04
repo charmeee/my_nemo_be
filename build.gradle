@@ -60,3 +60,19 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// .env 파일 로드 (개발 환경용)
+def envFile = file('.env')
+if (envFile.exists()) {
+    def envVars = [:]
+    envFile.eachLine { line ->
+        line = line.trim()
+        if (!line.startsWith('#') && line.contains('=')) {
+            def parts = line.split('=', 2)
+            envVars[parts[0].trim()] = parts[1].trim()
+        }
+    }
+    tasks.withType(JavaExec).configureEach {
+        environment envVars
+    }
+}
