@@ -11,6 +11,9 @@ import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.notification.entity.NotificationType;
+import com.nemo.nemo.domain.notification.service.NotificationService;
+import com.nemo.nemo.domain.sync.service.SessionGuard;
 import com.nemo.nemo.domain.trash.service.TrashService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -30,6 +34,9 @@ public class AlbumService {
     private final MemberRepository memberRepository;
     @Lazy
     private final TrashService trashService;
+    private final SessionGuard sessionGuard;
+    @Lazy
+    private final NotificationService notificationService;
 
     public AlbumListResponse getMyAlbums(UUID userId) {
         List<Album> ownedAlbums = albumRepository.findByCreatorIdAndDeletedAtIsNull(userId);
@@ -78,11 +85,32 @@ public class AlbumService {
 
         album.update(req.name(), req.coverImage());
 
+        List<String> memberIds = albumMemberRepository
+                .findByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE).stream()
+                .map(am -> am.getUser().getId().toString())
+                .toList();
+
+        if (req.name() != null || req.coverImage() != null) {
+            for (String memberId : memberIds) {
+                notificationService.send(memberId, NotificationType.ALBUM_UPDATED,
+                        Map.of("albumId", albumId.toString()));
+            }
+        }
+
         if (req.isLocked() != null) {
             if (req.isLocked()) {
                 album.lock();
+                sessionGuard.forceCloseAll(albumId.toString(), "album-locked");
+                for (String memberId : memberIds) {
+                    notificationService.send(memberId, NotificationType.ALBUM_LOCKED,
+                            Map.of("albumId", albumId.toString()));
+                }
             } else {
                 album.unlock();
+                for (String memberId : memberIds) {
+                    notificationService.send(memberId, NotificationType.ALBUM_UNLOCKED,
+                            Map.of("albumId", albumId.toString()));
+                }
             }
         }
 

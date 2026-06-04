@@ -2,6 +2,8 @@ package com.nemo.nemo.domain.sync.handler;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import com.nemo.nemo.domain.album.entity.AlbumRole;
+import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.sync.dto.ServerMessage;
 import com.nemo.nemo.domain.sync.service.ClockManager;
 import com.nemo.nemo.domain.sync.service.DocumentStore;
@@ -20,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,6 +39,7 @@ public class TLDrawSyncHandler extends TextWebSocketHandler {
     private final ClockManager clockManager;
     private final PresenceManager presenceManager;
     private final ObjectMapper objectMapper;
+    private final AlbumMemberRepository albumMemberRepository;
 
     // albumId → 문서 상태 Map (같은 앨범의 세션들이 공유)
     private final ConcurrentHashMap<String, Map<String, Object>> albumStates = new ConcurrentHashMap<>();
@@ -103,6 +107,16 @@ public class TLDrawSyncHandler extends TextWebSocketHandler {
     }
 
     private void handlePush(WebSocketSession session, String albumId, JsonNode root) {
+        String userId = (String) session.getAttributes().get("userId");
+        boolean isViewer = albumMemberRepository
+                .findActiveByAlbumIdAndUserId(UUID.fromString(albumId), UUID.fromString(userId))
+                .map(am -> am.getRole() == AlbumRole.VIEWER)
+                .orElse(true);
+        if (isViewer) {
+            log.debug("[handlePush] VIEWER {} rejected for albumId={}", userId, albumId);
+            return;
+        }
+
         Map<String, Object> state = albumStates.computeIfAbsent(albumId, documentStore::load);
         long newClock = clockManager.get(albumId);
 
