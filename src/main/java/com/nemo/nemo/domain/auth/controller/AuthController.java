@@ -5,8 +5,11 @@ import com.nemo.nemo.common.exception.ErrorCode;
 import com.nemo.nemo.common.exception.NemoException;
 import com.nemo.nemo.config.AppProperties;
 import com.nemo.nemo.config.JwtProperties;
+import com.nemo.nemo.domain.auth.dto.EmailLoginRequest;
+import com.nemo.nemo.domain.auth.dto.EmailRegisterRequest;
 import com.nemo.nemo.domain.auth.dto.MemberResponse;
 import com.nemo.nemo.domain.auth.dto.RefreshResponse;
+import com.nemo.nemo.domain.auth.service.EmailAuthService;
 import com.nemo.nemo.domain.auth.service.JwtTokenService;
 import com.nemo.nemo.domain.auth.service.RefreshTokenService;
 import com.nemo.nemo.domain.member.entity.Member;
@@ -31,17 +34,32 @@ public class AuthController {
     private final MemberRepository memberRepository;
     private final JwtProperties jwtProperties;
     private final AppProperties appProperties;
+    private final EmailAuthService emailAuthService;
 
     public AuthController(JwtTokenService jwtTokenService,
                           RefreshTokenService refreshTokenService,
                           MemberRepository memberRepository,
                           JwtProperties jwtProperties,
-                          AppProperties appProperties) {
+                          AppProperties appProperties,
+                          EmailAuthService emailAuthService) {
         this.jwtTokenService = jwtTokenService;
         this.refreshTokenService = refreshTokenService;
         this.memberRepository = memberRepository;
         this.jwtProperties = jwtProperties;
         this.appProperties = appProperties;
+        this.emailAuthService = emailAuthService;
+    }
+
+    @PostMapping("/register")
+    public ApiResponse<RefreshResponse> register(@RequestBody EmailRegisterRequest req, HttpServletResponse response) {
+        Member member = emailAuthService.register(req.email(), req.password(), req.nickname());
+        return issueTokens(member.getId().toString(), response);
+    }
+
+    @PostMapping("/login")
+    public ApiResponse<RefreshResponse> emailLogin(@RequestBody EmailLoginRequest req, HttpServletResponse response) {
+        Member member = emailAuthService.login(req.email(), req.password());
+        return issueTokens(member.getId().toString(), response);
     }
 
     @PostMapping("/refresh")
@@ -107,6 +125,21 @@ public class AuthController {
                 member.getProfileImage()
         );
         return ApiResponse.ok(body);
+    }
+
+    private ApiResponse<RefreshResponse> issueTokens(String userId, HttpServletResponse response) {
+        String accessToken = jwtTokenService.generateAccessToken(userId);
+        String refreshToken = jwtTokenService.generateRefreshToken(userId);
+        refreshTokenService.save(userId, refreshToken);
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(appProperties.getCookie().isSecure())
+                .path("/")
+                .maxAge(jwtProperties.getRefreshExpSec())
+                .sameSite(appProperties.getCookie().getSameSite())
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        return ApiResponse.ok(new RefreshResponse(accessToken, jwtProperties.getAccessExpSec()));
     }
 
     private String extractCookie(HttpServletRequest request, String name) {

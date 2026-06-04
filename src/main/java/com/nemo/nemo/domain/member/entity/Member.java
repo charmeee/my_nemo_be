@@ -24,6 +24,8 @@ public class Member {
 
     private String profileImage;
 
+    private String passwordHash;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
@@ -37,6 +39,14 @@ public class Member {
         member.email = email;
         member.nickname = nickname;
         member.profileImage = profileImage;
+        return member;
+    }
+
+    public static Member createWithPassword(String email, String passwordHash, String nickname) {
+        Member member = new Member();
+        member.email = email;
+        member.passwordHash = passwordHash;
+        member.nickname = nickname;
         return member;
     }
 }
