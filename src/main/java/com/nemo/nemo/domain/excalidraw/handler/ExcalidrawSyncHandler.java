@@ -7,6 +7,8 @@ import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
 import com.nemo.nemo.domain.album.service.MemberRoleCacheService;
 import com.nemo.nemo.domain.auth.service.JwtTokenService;
+import com.nemo.nemo.domain.member.entity.Member;
+import com.nemo.nemo.domain.member.repository.MemberRepository;
 import com.nemo.nemo.domain.excalidraw.entity.ExcalidrawPage;
 import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
 import com.nemo.nemo.domain.excalidraw.service.ElementDiffApplier;
@@ -54,6 +56,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     private final AlbumRepository albumRepository;
     private final MemberRoleCacheService roleCacheService;
     private final JwtTokenService jwtTokenService;
+    private final MemberRepository memberRepository;
     private final ObjectMapper objectMapper;
     private final ThreadPoolTaskScheduler taskScheduler;
 
@@ -160,6 +163,17 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
 
         session.getAttributes().put("userId", userId);
 
+        // userName 세션 속성 저장 (presence 표시용)
+        String userName;
+        if (userId.startsWith("guest:")) {
+            userName = "게스트";
+        } else {
+            userName = memberRepository.findById(UUID.fromString(userId))
+                    .map(Member::getNickname)
+                    .orElse("Unknown");
+        }
+        session.getAttributes().put("userName", userName);
+
         // N-CORE-03: VIEWER에게 isReadonly 전달
         AlbumRole role = roleCacheService.getRole(albumId, userId);
         boolean isReadonly = (role == null || role == AlbumRole.VIEWER);
@@ -176,6 +190,16 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
 
         boolean isDelta = !lastClockByPage.isEmpty() &&
                 pages.stream().allMatch(p -> lastClockByPage.containsKey(p.getPageId().toString()));
+
+        // 현재 접속 중인 다른 사용자 목록 (초기 presence 표시용)
+        List<Map<String, String>> roomMembers = roomManager.getSessions(albumId).stream()
+                .filter(s -> !s.getId().equals(session.getId()))
+                .filter(s -> s.getAttributes().get("userName") != null)
+                .map(s -> Map.of(
+                        "userId", (String) s.getAttributes().getOrDefault("userId", ""),
+                        "userName", (String) s.getAttributes().get("userName")
+                ))
+                .toList();
 
         if (isDelta) {
             Map<String, Object> deltaByPage = new LinkedHashMap<>();
@@ -195,7 +219,8 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
                     "type", "connected",
                     "hydrationType", "delta",
                     "isReadonly", isReadonly,
-                    "deltaByPage", deltaByPage
+                    "deltaByPage", deltaByPage,
+                    "roomMembers", roomMembers
             ));
         } else {
             String currentPageIdStr = root.path("currentPageId").asText(null);
@@ -231,9 +256,17 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
                     "type", "connected",
                     "hydrationType", "full",
                     "isReadonly", isReadonly,
-                    "pages", pageList
+                    "pages", pageList,
+                    "roomMembers", roomMembers
             ));
         }
+
+        // user_joined 브로드캐스트
+        broadcast(albumId, session, Map.of(
+                "type", "user_joined",
+                "userId", userId,
+                "userName", userName
+        ));
 
         log.debug("[Excalidraw] connect handled: albumId={}, pages={}, delta={}", albumId, pages.size(), isDelta);
     }
@@ -342,6 +375,8 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     private void handlePresence(WebSocketSession session, String albumId, String userId, JsonNode root) {
         Map<String, Object> presenceData = new LinkedHashMap<>();
         presenceData.put("userId", userId);
+        String presenceUserName = (String) session.getAttributes().get("userName");
+        presenceData.put("userName", presenceUserName != null ? presenceUserName : "");
         presenceData.put("pageId", root.path("pageId").asText(""));
         presenceData.put("cursor", parseNode(root.path("cursor")));
         presenceData.put("selectedIds", parseNode(root.path("selectedIds")));
@@ -359,6 +394,11 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
 
         pushCounters.remove(session.getId());
         sessionCurrentPage.remove(session.getId());
+
+        String userId = (String) session.getAttributes().get("userId");
+        if (userId != null && albumId != null) {
+            broadcast(albumId, session, Map.of("type", "user_left", "userId", userId));
+        }
         roomManager.leave(albumId, session);
 
         if (roomManager.isEmpty(albumId)) {

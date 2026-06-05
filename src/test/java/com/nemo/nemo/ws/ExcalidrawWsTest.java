@@ -74,6 +74,8 @@ class ExcalidrawWsTest {
     private String bobToken;
     private String carolToken;
     private String aliceId;
+    private String bobId;
+    private String carolId;
 
     private String albumId;
     private String pageId;
@@ -92,6 +94,8 @@ class ExcalidrawWsTest {
         carolToken = testLogin("carol-ws-" + suffix + "@test.com", "Carol");
 
         aliceId = extractUserId(aliceToken);
+        bobId   = extractUserId(bobToken);
+        carolId = extractUserId(carolToken);
 
         albumId = createAlbum(aliceToken, "[TC-WS] Test Album " + suffix);
         pageId  = getFirstPageId(aliceToken, albumId);
@@ -404,8 +408,282 @@ class ExcalidrawWsTest {
     }
 
     // ────────────────────────────────────────────
+    // TC-PRES-01: connected.roomMembers 포함 검증
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-01: connected 응답 — roomMembers에 기존 참여자 포함")
+    void pres01_connected_roomMembers() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000); // connected (roomMembers=[])
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        String msg = bob.poll(5000); // connected
+
+        assertThat(msg).isNotNull();
+        JsonNode node = objectMapper.readTree(msg);
+        assertThat(node.path("type").asText()).isEqualTo("connected");
+
+        JsonNode members = node.path("roomMembers");
+        assertThat(members.isArray()).isTrue();
+        assertThat(members.size()).isEqualTo(1);
+        assertThat(members.get(0).path("userId").asText()).isEqualTo(aliceId);
+        assertThat(members.get(0).path("userName").asText()).isEqualTo("Alice");
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-02: user_joined broadcast + self-echo 없음
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-02: user_joined — 신규 입장 시 기존 참여자에게 broadcast, self-echo 없음")
+    void pres02_userJoined_broadcast() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000); // Bob's connected
+
+        String joinMsg = pollUntilType(alice, "user_joined", 3000);
+        assertThat(joinMsg).isNotNull();
+        JsonNode node = objectMapper.readTree(joinMsg);
+        assertThat(node.path("userId").asText()).isEqualTo(bobId);
+        assertThat(node.path("userName").asText()).isEqualTo("Bob");
+
+        // Bob은 자신의 user_joined를 받지 않아야 함
+        assertThat(pollUntilType(bob, "user_joined", 500)).isNull();
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-03: user_left broadcast — 정상 종료
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-03: user_left — 연결 종료 시 나머지 참여자에게 broadcast")
+    void pres03_userLeft_onClose() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000);
+        alice.poll(2000); // drain user_joined(bob)
+
+        bob.close();
+
+        String leftMsg = pollUntilType(alice, "user_left", 3000);
+        assertThat(leftMsg).isNotNull();
+        assertThat(objectMapper.readTree(leftMsg).path("userId").asText()).isEqualTo(bobId);
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-04: presence broadcast — userName + 필드 검증
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-04: presence broadcast — userName, pageId, cursor, selectedIds 포함 / self-echo 없음")
+    void pres04_presence_includesUserName() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000);
+        alice.poll(2000); // drain user_joined
+
+        bob.send("{\"type\":\"presence\",\"pageId\":\"" + pageId + "\","
+                + "\"cursor\":{\"x\":200,\"y\":350},"
+                + "\"selectedIds\":[\"elem-abc\"]}");
+
+        String presMsg = pollUntilType(alice, "presence", 3000);
+        assertThat(presMsg).isNotNull();
+        JsonNode p = objectMapper.readTree(presMsg).path("presence");
+        assertThat(p.path("userId").asText()).isEqualTo(bobId);
+        assertThat(p.path("userName").asText()).isEqualTo("Bob");
+        assertThat(p.path("pageId").asText()).isEqualTo(pageId);
+        assertThat(p.path("cursor").path("x").asInt()).isEqualTo(200);
+        assertThat(p.path("cursor").path("y").asInt()).isEqualTo(350);
+        assertThat(p.path("selectedIds").get(0).asText()).isEqualTo("elem-abc");
+
+        // self-echo: Bob은 자신의 presence를 받지 않아야 함
+        assertThat(pollUntilType(bob, "presence", 500)).isNull();
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-05: 부분 presence — cursor만 / selectedIds만 전송 시 NPE 없음
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-05: presence 부분 전송 — cursor만 / selectedIds만 서버 오류 없이 broadcast")
+    void pres05_presence_partial() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000);
+        alice.poll(2000); // drain user_joined
+
+        // cursor만 전송
+        bob.send("{\"type\":\"presence\",\"pageId\":\"" + pageId + "\","
+                + "\"cursor\":{\"x\":100,\"y\":200}}");
+        String msg1 = pollUntilType(alice, "presence", 3000);
+        assertThat(msg1).isNotNull();
+        JsonNode p1 = objectMapper.readTree(msg1).path("presence");
+        assertThat(p1.path("cursor").path("x").asInt()).isEqualTo(100);
+        assertThat(p1.path("selectedIds").isNull()).isTrue();
+
+        // selectedIds만 전송
+        bob.send("{\"type\":\"presence\",\"pageId\":\"" + pageId + "\","
+                + "\"selectedIds\":[\"e1\",\"e2\"]}");
+        String msg2 = pollUntilType(alice, "presence", 3000);
+        assertThat(msg2).isNotNull();
+        JsonNode p2 = objectMapper.readTree(msg2).path("presence");
+        assertThat(p2.path("selectedIds").size()).isEqualTo(2);
+        assertThat(p2.path("cursor").isNull()).isTrue();
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-06: VIEWER presence 허용 / push 거부
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-06: VIEWER — presence broadcast 허용, push는 read-only 거부")
+    void pres06_viewer_presenceAllowed_pushRejected() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn carol = connect(albumId, carolToken);
+        carol.send(connectMsg(carolToken));
+        carol.poll(5000);
+        alice.poll(2000); // drain user_joined(carol)
+
+        // Carol(VIEWER) → presence 전송 → Alice가 수신해야 함
+        carol.send("{\"type\":\"presence\",\"pageId\":\"" + pageId + "\","
+                + "\"cursor\":{\"x\":50,\"y\":50},\"selectedIds\":[]}");
+        String presMsg = pollUntilType(alice, "presence", 3000);
+        assertThat(presMsg).isNotNull();
+        assertThat(objectMapper.readTree(presMsg).path("presence").path("userId").asText())
+                .isEqualTo(carolId);
+
+        // Carol → push 전송 → read-only 에러
+        carol.send(buildPush(pageId, 0, singleElement("el-viewer-push", 1)));
+        String pushResult = carol.poll(3000);
+        assertThat(pushResult).isNotNull();
+        JsonNode err = objectMapper.readTree(pushResult);
+        assertThat(err.path("type").asText()).isEqualTo("error");
+        assertThat(err.path("error").asText()).isEqualTo("read-only");
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-07: 3인 접속 — roomMembers 정합성 + user_left 멀티 broadcast
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-07: 3인 접속 — roomMembers 2개, 종료 시 alice·carol 양쪽에 user_left")
+    void pres07_three_sessions_roomMembers() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000);
+        alice.poll(2000); // drain user_joined(bob)
+
+        WsConn carol = connect(albumId, carolToken);
+        carol.send(connectMsg(carolToken));
+        String carolConnected = carol.poll(5000);
+        alice.poll(2000); // drain user_joined(carol)
+        bob.poll(2000);   // drain user_joined(carol)
+
+        // Carol의 connected.roomMembers = [alice, bob]
+        assertThat(carolConnected).isNotNull();
+        JsonNode members = objectMapper.readTree(carolConnected).path("roomMembers");
+        assertThat(members.isArray()).isTrue();
+        assertThat(members.size()).isEqualTo(2);
+        List<String> ids = new ArrayList<>();
+        members.forEach(m -> ids.add(m.path("userId").asText()));
+        assertThat(ids).containsExactlyInAnyOrder(aliceId, bobId);
+
+        // Bob 종료 → Alice, Carol 양쪽에 user_left(bob)
+        bob.close();
+        String aliceLeft = pollUntilType(alice, "user_left", 3000);
+        String carolLeft = pollUntilType(carol, "user_left", 3000);
+        assertThat(aliceLeft).isNotNull();
+        assertThat(carolLeft).isNotNull();
+        assertThat(objectMapper.readTree(aliceLeft).path("userId").asText()).isEqualTo(bobId);
+        assertThat(objectMapper.readTree(carolLeft).path("userId").asText()).isEqualTo(bobId);
+    }
+
+    // ────────────────────────────────────────────
+    // TC-PRES-08: 추방 → force-close + user_left + roomMembers 정리
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-PRES-08: 추방 시 force-close 수신 + user_left broadcast + roomMembers에서 제거")
+    void pres08_forceClose_cleansRoomMembers() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        WsConn bob = connect(albumId, bobToken);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000);
+        alice.poll(2000); // drain user_joined(bob)
+
+        // Alice가 Bob 추방
+        restTemplate.exchange(
+                base() + "/albums/" + albumId + "/members/" + bobId,
+                HttpMethod.DELETE,
+                new HttpEntity<>(auth(aliceToken)),
+                String.class);
+
+        // Bob: force-close 수신
+        String fcMsg = pollUntilType(bob, "force-close", 3000);
+        assertThat(fcMsg).isNotNull();
+        assertThat(objectMapper.readTree(fcMsg).path("reason").asText()).isEqualTo("kicked");
+
+        // Alice: user_left(bob) 수신
+        String ulMsg = pollUntilType(alice, "user_left", 3000);
+        assertThat(ulMsg).isNotNull();
+        assertThat(objectMapper.readTree(ulMsg).path("userId").asText()).isEqualTo(bobId);
+
+        // Carol 신규 접속 → roomMembers에 Bob 없음
+        WsConn carol = connect(albumId, carolToken);
+        carol.send(connectMsg(carolToken));
+        String carolConnected = carol.poll(5000);
+        assertThat(carolConnected).isNotNull();
+        List<String> memberIds = new ArrayList<>();
+        objectMapper.readTree(carolConnected).path("roomMembers")
+                .forEach(m -> memberIds.add(m.path("userId").asText()));
+        assertThat(memberIds).doesNotContain(bobId);
+    }
+
+    // ────────────────────────────────────────────
     // WS 연결 헬퍼
     // ────────────────────────────────────────────
+
+    /** 지정 type의 메시지가 올 때까지 큐를 드레인. 없으면 null 반환. */
+    private String pollUntilType(WsConn conn, String type, long timeoutMs) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            long remaining = deadline - System.currentTimeMillis();
+            if (remaining <= 0) break;
+            String msg = conn.poll(Math.min(remaining, 500));
+            if (msg == null) break;
+            if (type.equals(objectMapper.readTree(msg).path("type").asText())) return msg;
+        }
+        return null;
+    }
 
     private WsConn connect(String albumId, String token) throws Exception {
         WsConn conn = new WsConn();
