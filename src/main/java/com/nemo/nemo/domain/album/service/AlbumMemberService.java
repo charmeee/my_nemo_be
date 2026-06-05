@@ -144,6 +144,30 @@ public class AlbumMemberService {
     }
 
     @Transactional
+    public void inviteByEmail(UUID albumId, String email, AlbumRole role, UUID requesterId) {
+        requireAdmin(albumId, requesterId);
+
+        com.nemo.nemo.domain.member.entity.Member target = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new com.nemo.nemo.common.exception.NemoException(
+                        com.nemo.nemo.common.exception.ErrorCode.MEMBER_NOT_FOUND));
+
+        albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, target.getId())
+                .ifPresent(am -> { throw new com.nemo.nemo.common.exception.NemoException(
+                        com.nemo.nemo.common.exception.ErrorCode.MEMBER_ALREADY_IN_ALBUM); });
+
+        com.nemo.nemo.domain.album.entity.Album album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new com.nemo.nemo.common.exception.NemoException(
+                        com.nemo.nemo.common.exception.ErrorCode.ALBUM_NOT_FOUND));
+
+        AlbumMember newMember = AlbumMember.create(album, target, role, MemberStatus.PENDING);
+        albumMemberRepository.save(newMember);
+        roleCacheService.invalidate(albumId.toString(), target.getId().toString());
+
+        notificationService.send(target.getId().toString(), NotificationType.ALBUM_INVITATION,
+                Map.of("albumId", albumId.toString(), "albumName", album.getName()));
+    }
+
+    @Transactional
     public void transferAdmin(UUID albumId, UUID targetUserId, UUID requesterId) {
         requireAdmin(albumId, requesterId);
 

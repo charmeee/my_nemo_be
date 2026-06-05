@@ -1,26 +1,25 @@
 package com.nemo.nemo.domain.excalidraw.service;
 
 import tools.jackson.databind.ObjectMapper;
-import com.nemo.nemo.domain.excalidraw.entity.ExcalidrawPage;
 import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
 import com.nemo.nemo.domain.sync.service.ClockManager;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 페이지별 ExcalidrawElement[] 상태를 메모리(ConcurrentHashMap) + Redis + PostgreSQL 에 관리.
  * Write-Behind: push 수신 시 메모리+Redis 즉시 갱신, 5초 유휴 후 DB flush.
+ * Spring-managed ThreadPoolTaskScheduler를 사용해 JVM 종료 시 graceful shutdown을 보장합니다.
  */
 @Slf4j
 @Service
@@ -33,13 +32,13 @@ public class PageDocumentStore {
     private final ExcalidrawPageRepository repository;
     private final ObjectMapper objectMapper;
     private final ClockManager clockManager;
+    private final ThreadPoolTaskScheduler taskScheduler;
 
     /** pageId → elements JSON (in-memory) */
     private final ConcurrentHashMap<String, String> pageStates = new ConcurrentHashMap<>();
 
     /** pageId → debounce timer for write-behind */
     private final ConcurrentHashMap<String, ScheduledFuture<?>> flushTimers = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
     /** 페이지 elements 로드 (메모리 → Redis → DB 순서) */
     public String loadElements(String pageId) {
@@ -82,9 +81,26 @@ public class PageDocumentStore {
         doFlush(pageId);
     }
 
+    /**
+     * 앱 종료 시 메모리에 남아 있는 모든 페이지를 즉시 flush합니다.
+     * 5초 debounce 도중 서버가 종료되어 변경이 유실되는 것을 방지합니다.
+     */
+    @PreDestroy
+    public void flushAll() {
+        int count = pageStates.size();
+        pageStates.keySet().forEach(pageId -> {
+            cancelFlushTimer(pageId);
+            doFlush(pageId);
+        });
+        log.info("[PageDocumentStore] @PreDestroy flush complete: {} pages flushed", count);
+    }
+
     private void resetFlushTimer(String pageId) {
         cancelFlushTimer(pageId);
-        ScheduledFuture<?> future = scheduler.schedule(() -> doFlush(pageId), 5, TimeUnit.SECONDS);
+        ScheduledFuture<?> future = taskScheduler.schedule(
+                () -> doFlush(pageId),
+                Instant.now().plusSeconds(5)
+        );
         flushTimers.put(pageId, future);
     }
 

@@ -16,6 +16,7 @@ import com.nemo.nemo.domain.album.entity.MemberStatus;
 import com.nemo.nemo.domain.notification.entity.NotificationType;
 import com.nemo.nemo.domain.notification.service.NotificationService;
 import com.nemo.nemo.domain.sync.service.RoomManager;
+import com.nemo.nemo.domain.trash.service.TrashService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,8 @@ public class ExcalidrawPageService {
     private final ObjectMapper objectMapper;
     @Lazy
     private final NotificationService notificationService;
+    @Lazy
+    private final TrashService trashService;
 
     public List<PageListResponse> getPages(UUID albumId, UUID userId) {
         getMemberOrThrow(albumId, userId);
@@ -105,7 +108,15 @@ public class ExcalidrawPageService {
                 .orElseThrow(() -> new NemoException(ErrorCode.IMAGE_NOT_FOUND));
 
         page.softDelete();
+        trashService.addPageToTrash(pageId, albumId, userId);
         broadcastPageEvent(albumId.toString(), "deleted", pageId.toString(), page.getName(), page.getPageOrder());
+    }
+
+    /** 게스트 접근용: 멤버십 검증 없이 페이지 목록 반환 */
+    public List<PageListResponse> getPublicPages(UUID albumId) {
+        return pageRepository.findByAlbumIdOrderByPageOrder(albumId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private void getMemberOrThrow(UUID albumId, UUID userId) {

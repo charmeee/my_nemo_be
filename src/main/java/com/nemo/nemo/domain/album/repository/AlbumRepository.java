@@ -17,7 +17,7 @@ public interface AlbumRepository extends JpaRepository<Album, UUID> {
     @Query("SELECT a FROM Album a JOIN AlbumMember am ON am.album.id = a.id WHERE am.user.id = :userId AND am.status = 'ACTIVE' AND a.deletedAt IS NULL ORDER BY a.updatedAt DESC")
     List<Album> findAlbumsByMemberId(@Param("userId") UUID userId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE Album a SET a.deletedAt = null WHERE a.id = :albumId")
     void restoreAlbum(@Param("albumId") UUID albumId);
 }

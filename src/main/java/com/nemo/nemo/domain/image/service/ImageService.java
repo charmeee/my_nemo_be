@@ -66,6 +66,10 @@ public class ImageService {
                 .filter(a -> a.getDeletedAt() == null)
                 .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_NOT_FOUND));
 
+        if (album.isLocked() && albumMember.getRole() != AlbumRole.ADMIN) {
+            throw new NemoException(ErrorCode.ALBUM_LOCKED);
+        }
+
         Member uploader = memberRepository.findById(userId)
                 .orElseThrow(() -> new NemoException(ErrorCode.MEMBER_NOT_FOUND));
 

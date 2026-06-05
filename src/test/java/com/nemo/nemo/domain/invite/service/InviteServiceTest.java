@@ -20,7 +20,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +42,9 @@ class InviteServiceTest {
     @Mock AlbumMemberRepository albumMemberRepository;
     @Mock MemberRepository memberRepository;
     @Mock NotificationService notificationService;
+    @Mock StringRedisTemplate redis;
+    @Mock ObjectMapper objectMapper;
+    @Mock ValueOperations<String, String> valueOps;
     @InjectMocks InviteService inviteService;
 
     private UUID userId;
@@ -55,6 +61,7 @@ class InviteServiceTest {
         album = Album.create("테스트 앨범", null, UUID.randomUUID());
         ReflectionTestUtils.setField(album, "id", albumId);
         activeLink = InviteLink.create(album, AlbumRole.EDITOR, false, "testcode1234");
+        lenient().when(redis.opsForValue()).thenReturn(valueOps);
     }
 
     @Nested
@@ -91,7 +98,7 @@ class InviteServiceTest {
             AlbumMember existing = AlbumMember.create(album, member, AlbumRole.EDITOR, MemberStatus.ACTIVE);
             given(inviteLinkRepository.findByCode("testcode1234")).willReturn(Optional.of(activeLink));
             given(memberRepository.findById(userId)).willReturn(Optional.of(member));
-            given(albumMemberRepository.findActiveByAlbumIdAndUserId(any(), eq(userId)))
+            given(albumMemberRepository.findByAlbumIdAndUserId(any(), eq(userId)))
                     .willReturn(Optional.of(existing));
 
             inviteService.joinViaInvite("testcode1234", userId);
@@ -105,7 +112,7 @@ class InviteServiceTest {
         void 신규가입_즉시_활성화() {
             given(inviteLinkRepository.findByCode("testcode1234")).willReturn(Optional.of(activeLink));
             given(memberRepository.findById(userId)).willReturn(Optional.of(member));
-            given(albumMemberRepository.findActiveByAlbumIdAndUserId(any(), eq(userId)))
+            given(albumMemberRepository.findByAlbumIdAndUserId(any(), eq(userId)))
                     .willReturn(Optional.empty());
             doNothing().when(notificationService).send(any(), any(), any());
 

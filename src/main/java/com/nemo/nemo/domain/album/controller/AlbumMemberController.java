@@ -1,6 +1,7 @@
 package com.nemo.nemo.domain.album.controller;
 
 import com.nemo.nemo.common.dto.ApiResponse;
+import com.nemo.nemo.domain.album.dto.DirectInviteRequest;
 import com.nemo.nemo.domain.album.dto.MemberResponse;
 import com.nemo.nemo.domain.album.dto.RoleChangeRequest;
 import com.nemo.nemo.domain.album.dto.TransferAdminRequest;
@@ -74,6 +75,15 @@ public class AlbumMemberController {
             @PathVariable UUID albumId,
             @AuthenticationPrincipal String userId) {
         albumMemberService.leaveAlbum(albumId, UUID.fromString(userId));
+        return ResponseEntity.ok(ApiResponse.ok());
+    }
+
+    @PostMapping("/albums/{albumId}/members/invite-by-email")
+    public ResponseEntity<ApiResponse<Void>> inviteByEmail(
+            @PathVariable UUID albumId,
+            @RequestBody DirectInviteRequest req,
+            @AuthenticationPrincipal String userId) {
+        albumMemberService.inviteByEmail(albumId, req.email(), req.role(), UUID.fromString(userId));
         return ResponseEntity.ok(ApiResponse.ok());
     }
 

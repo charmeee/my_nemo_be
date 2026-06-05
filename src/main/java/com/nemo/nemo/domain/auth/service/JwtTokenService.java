@@ -32,6 +32,22 @@ public class JwtTokenService {
                 .compact();
     }
 
+    /**
+     * 비회원 게스트용 24시간 토큰.
+     * subject = "guest:{albumId}" — DB 멤버십 없이 해당 앨범 읽기 전용 접근 허용.
+     */
+    public String generateGuestToken(String albumId) {
+        long expMs = 24 * 60 * 60 * 1000L;
+        return Jwts.builder()
+                .subject("guest:" + albumId)
+                .claim("type", "guest")
+                .claim("albumId", albumId)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expMs))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
     public String generateRefreshToken(String userId) {
         long expMs = jwtProperties.getRefreshExpSec() * 1000;
         return Jwts.builder()

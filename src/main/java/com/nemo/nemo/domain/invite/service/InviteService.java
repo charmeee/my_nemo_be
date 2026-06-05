@@ -119,7 +119,7 @@ public class InviteService {
     }
 
     @Transactional
-    public void joinViaInvite(String code, UUID userId) {
+    public MemberStatus joinViaInvite(String code, UUID userId) {
         InviteLink link = inviteLinkRepository.findByCode(code)
                 .orElseThrow(() -> new NemoException(ErrorCode.INVITE_NOT_FOUND));
 
@@ -131,9 +131,9 @@ public class InviteService {
         Member member = memberRepository.findById(userId)
                 .orElseThrow(() -> new NemoException(ErrorCode.MEMBER_NOT_FOUND));
 
-        Optional<AlbumMember> existing = albumMemberRepository.findActiveByAlbumIdAndUserId(album.getId(), userId);
+        Optional<AlbumMember> existing = albumMemberRepository.findByAlbumIdAndUserId(album.getId(), userId);
         if (existing.isPresent()) {
-            return;
+            return existing.get().getStatus();
         }
 
         MemberStatus status = link.isApprovalRequired() ? MemberStatus.PENDING : MemberStatus.ACTIVE;
@@ -153,6 +153,15 @@ public class InviteService {
                         "memberId", userId.toString()
                 )
         );
+        return status;
+    }
+
+    /** 초대 코드로 albumId 조회 (게스트 페이지 목록용) */
+    public UUID getAlbumIdByCode(String code) {
+        InviteLink link = inviteLinkRepository.findByCode(code)
+                .orElseThrow(() -> new NemoException(ErrorCode.INVITE_NOT_FOUND));
+        if (!link.isActive()) throw new NemoException(ErrorCode.INVITE_INACTIVE);
+        return link.getAlbum().getId();
     }
 
     @Transactional
