@@ -5,6 +5,8 @@ import com.nemo.nemo.domain.invite.dto.InviteCreateRequest;
 import com.nemo.nemo.domain.invite.dto.InviteInfoResponse;
 import com.nemo.nemo.domain.invite.dto.InviteLinkResponse;
 import com.nemo.nemo.domain.invite.service.InviteService;
+
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +19,14 @@ import java.util.UUID;
 public class InviteController {
 
     private final InviteService inviteService;
+
+    @GetMapping("/albums/{albumId}/invite")
+    public ResponseEntity<ApiResponse<List<InviteLinkResponse>>> getInviteLinks(
+            @PathVariable UUID albumId,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                inviteService.getInviteLinks(albumId, UUID.fromString(userId))));
+    }
 
     @PostMapping("/albums/{albumId}/invite")
     public ResponseEntity<ApiResponse<InviteLinkResponse>> createInviteLink(

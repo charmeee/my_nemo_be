@@ -73,6 +73,23 @@ public class ElementDiffApplier {
     }
 
     /**
+     * N-CORE-11: non-deleted element 수 반환.
+     */
+    public ElementCountResult countNonDeleted(String elementsJson) throws Exception {
+        JsonNode arr = objectMapper.readTree(elementsJson);
+        if (!arr.isArray()) return new ElementCountResult(0);
+        int count = 0;
+        for (JsonNode node : arr) {
+            if (!node.path("isDeleted").booleanValue(false)) {
+                count++;
+            }
+        }
+        return new ElementCountResult(count);
+    }
+
+    public record ElementCountResult(int count) {}
+
+    /**
      * elements JSON array를 id → JsonNode LinkedHashMap으로 파싱.
      * 순서 보존을 위해 LinkedHashMap 사용.
      */

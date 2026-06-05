@@ -11,6 +11,8 @@ import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.invite.entity.InviteLink;
+import com.nemo.nemo.domain.invite.repository.InviteLinkRepository;
 import com.nemo.nemo.domain.notification.entity.NotificationType;
 import com.nemo.nemo.domain.notification.service.NotificationService;
 import com.nemo.nemo.domain.sync.service.SessionGuard;
@@ -37,6 +39,7 @@ public class AlbumService {
     private final SessionGuard sessionGuard;
     @Lazy
     private final NotificationService notificationService;
+    private final InviteLinkRepository inviteLinkRepository;
 
     public AlbumListResponse getMyAlbums(UUID userId) {
         List<Album> ownedAlbums = albumRepository.findByCreatorIdAndDeletedAtIsNull(userId);
@@ -67,6 +70,10 @@ public class AlbumService {
 
         AlbumMember albumMember = AlbumMember.create(album, member, AlbumRole.ADMIN, MemberStatus.ACTIVE);
         albumMemberRepository.save(albumMember);
+
+        // N-CORE-01: 앨범 생성 시 초대 링크 자동 발급 (EDITOR 역할, 승인 불필요)
+        String code = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        inviteLinkRepository.save(InviteLink.create(album, AlbumRole.EDITOR, false, code));
 
         return toResponse(album, userId);
     }

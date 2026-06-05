@@ -35,6 +35,7 @@ public class AlbumMemberService {
     private final NotificationService notificationService;
     @Lazy
     private final com.nemo.nemo.domain.trash.service.TrashService trashService;
+    private final MemberRoleCacheService roleCacheService;
 
     public List<MemberResponse> getMembers(UUID albumId, UUID requesterId) {
         getMemberOrThrow(albumId, requesterId);
@@ -53,6 +54,7 @@ public class AlbumMemberService {
         requireAdmin(albumId, requesterId);
         AlbumMember target = getPendingMemberOrThrow(albumId, targetUserId);
         target.approve();
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
         notificationService.send(targetUserId.toString(), NotificationType.JOIN_APPROVED,
                 Map.of("albumId", albumId.toString()));
     }
@@ -62,6 +64,7 @@ public class AlbumMemberService {
         requireAdmin(albumId, requesterId);
         AlbumMember target = getPendingMemberOrThrow(albumId, targetUserId);
         target.reject();
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
         notificationService.send(targetUserId.toString(), NotificationType.JOIN_REJECTED,
                 Map.of("albumId", albumId.toString()));
     }
@@ -80,6 +83,7 @@ public class AlbumMemberService {
         AlbumMember target = getMemberOrThrow(albumId, targetUserId);
         AlbumRole oldRole = target.getRole();
         target.changeRole(newRole);
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
 
         notificationService.send(targetUserId.toString(), NotificationType.ROLE_CHANGED,
                 Map.of("albumId", albumId.toString(), "newRole", newRole.name()));
@@ -100,6 +104,7 @@ public class AlbumMemberService {
         AlbumMember target = getMemberOrThrow(albumId, targetUserId);
         sessionGuard.forceClose(albumId.toString(), targetUserId.toString(), "kicked");
         albumMemberRepository.delete(target);
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
 
         if (albumMemberRepository.countByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE) == 0) {
             albumRepository.findById(albumId).ifPresent(album -> {
@@ -123,6 +128,7 @@ public class AlbumMemberService {
                 .findFirst().orElse(null);
 
         albumMemberRepository.delete(member);
+        roleCacheService.invalidate(albumId.toString(), userId.toString());
 
         if (adminId != null) {
             notificationService.send(adminId, NotificationType.MEMBER_LEFT,

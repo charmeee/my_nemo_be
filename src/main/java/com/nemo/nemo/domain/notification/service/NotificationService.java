@@ -12,12 +12,16 @@ import com.nemo.nemo.domain.notification.entity.NotificationType;
 import com.nemo.nemo.domain.notification.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -37,26 +41,53 @@ public class NotificationService {
     private final MemberRepository memberRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final RedisMessageListenerContainer redisListenerContainer;
 
     private final ConcurrentHashMap<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, MessageListener> redisListeners = new ConcurrentHashMap<>();
 
     public SseEmitter subscribe(String userId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
-        emitter.onTimeout(() -> emitters.remove(userId));
-        emitter.onError(e -> emitters.remove(userId));
-        emitter.onCompletion(() -> emitters.remove(userId));
+        // N-NOTIF-07: Redis Pub/Sub 구독 — 다른 인스턴스에서 publish된 알림도 수신
+        MessageListener listener = (message, pattern) -> {
+            SseEmitter e = emitters.get(userId);
+            if (e == null) return;
+            try {
+                String json = new String(message.getBody(), StandardCharsets.UTF_8);
+                e.send(SseEmitter.event().name("notification").data(json));
+            } catch (IOException ex) {
+                cleanupEmitter(userId);
+            }
+        };
+        ChannelTopic topic = new ChannelTopic("notification:" + userId);
+        redisListenerContainer.addMessageListener(listener, topic);
+        redisListeners.put(userId, listener);
+
+        Runnable cleanup = () -> cleanupEmitter(userId);
+        emitter.onTimeout(cleanup);
+        emitter.onError(e -> cleanupEmitter(userId));
+        emitter.onCompletion(cleanup);
 
         emitters.put(userId, emitter);
 
         try {
             emitter.send(SseEmitter.event().name("ping").data("connected"));
         } catch (IOException e) {
-            emitters.remove(userId);
-            emitter.completeWithError(e);
+            cleanupEmitter(userId);
         }
 
         return emitter;
+    }
+
+    private void cleanupEmitter(String userId) {
+        emitters.remove(userId);
+        MessageListener listener = redisListeners.remove(userId);
+        if (listener != null) {
+            try {
+                redisListenerContainer.removeMessageListener(listener);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Transactional
@@ -84,23 +115,27 @@ public class NotificationService {
         Notification notification = Notification.create(member, type, payloadJson);
         notificationRepository.save(notification);
 
-        SseEmitter emitter = emitters.get(userId);
-        if (emitter != null) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("notification")
-                        .data(toResponse(notification)));
-            } catch (IOException e) {
-                emitters.remove(userId);
-                emitter.completeWithError(e);
-            }
+        // N-NOTIF-07: Redis Pub/Sub으로 publish → 구독 중인 인스턴스의 SSE로 전달
+        String responseJson;
+        try {
+            responseJson = objectMapper.writeValueAsString(toResponse(notification));
+        } catch (JacksonException e) {
+            responseJson = payloadJson;
         }
-
         String channel = "notification:" + userId;
         try {
-            stringRedisTemplate.convertAndSend(channel, payloadJson);
+            stringRedisTemplate.convertAndSend(channel, responseJson);
         } catch (Exception e) {
-            log.warn("Redis pub/sub publish failed for userId={}: {}", userId, e.getMessage());
+            // Redis publish 실패 시 직접 SSE 전송으로 fallback
+            log.warn("Redis pub/sub publish failed for userId={}, falling back to direct SSE: {}", userId, e.getMessage());
+            SseEmitter emitter = emitters.get(userId);
+            if (emitter != null) {
+                try {
+                    emitter.send(SseEmitter.event().name("notification").data(responseJson));
+                } catch (IOException ioEx) {
+                    cleanupEmitter(userId);
+                }
+            }
         }
     }
 

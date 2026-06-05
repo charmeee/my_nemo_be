@@ -4,6 +4,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.nemo.nemo.domain.album.entity.AlbumRole;
 import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
+import com.nemo.nemo.domain.album.repository.AlbumRepository;
+import com.nemo.nemo.domain.album.service.MemberRoleCacheService;
 import com.nemo.nemo.domain.excalidraw.entity.ExcalidrawPage;
 import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
 import com.nemo.nemo.domain.excalidraw.service.ElementDiffApplier;
@@ -18,6 +20,8 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,7 +50,13 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     private final ElementDiffApplier elementDiffApplier;
     private final ExcalidrawPageRepository pageRepository;
     private final AlbumMemberRepository albumMemberRepository;
+    private final AlbumRepository albumRepository;
+    private final MemberRoleCacheService roleCacheService;
     private final ObjectMapper objectMapper;
+
+    // N-CORE-12: WS push rate limiting — sessionId → push count in current minute
+    private final ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> pushCounters = new ConcurrentHashMap<>();
+    private static final int MAX_PUSH_PER_MINUTE = 120;
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
     private final ConcurrentHashMap<String, ScheduledFuture<?>> keepAliveTimers = new ConcurrentHashMap<>();
@@ -93,6 +103,12 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
 
     /** 접속 시: lastClockByPage 기반 full or delta hydration */
     private void handleConnect(WebSocketSession session, String albumId, JsonNode root) {
+        String userId = (String) session.getAttributes().get("userId");
+
+        // N-CORE-03: VIEWER에게 isReadonly 전달
+        AlbumRole role = roleCacheService.getRole(albumId, userId);
+        boolean isReadonly = (role == null || role == AlbumRole.VIEWER);
+
         Map<String, Long> lastClockByPage = new LinkedHashMap<>();
         JsonNode clocks = root.path("lastClockByPage");
         if (clocks.isObject()) {
@@ -125,6 +141,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
             sendJson(session, Map.of(
                     "type", "connected",
                     "hydrationType", "delta",
+                    "isReadonly", isReadonly,
                     "deltaByPage", deltaByPage
             ));
         } else {
@@ -145,6 +162,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
             sendJson(session, Map.of(
                     "type", "connected",
                     "hydrationType", "full",
+                    "isReadonly", isReadonly,
                     "pages", pageList
             ));
         }
@@ -152,14 +170,30 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         log.debug("[Excalidraw] connect handled: albumId={}, pages={}, delta={}", albumId, pages.size(), isDelta);
     }
 
-    /** push: VIEWER 차단, LWW merge, broadcast patch */
+    /** push: 잠금/VIEWER/rate-limit 차단, LWW merge, broadcast patch */
     private void handlePush(WebSocketSession session, String albumId, String userId, JsonNode root) {
-        boolean isViewer = albumMemberRepository
-                .findActiveByAlbumIdAndUserId(UUID.fromString(albumId), UUID.fromString(userId))
-                .map(am -> am.getRole() == AlbumRole.VIEWER)
+        // B-SEC-02: 앨범 잠금 상태 체크
+        boolean locked = albumRepository.findById(UUID.fromString(albumId))
+                .map(a -> a.isLocked())
                 .orElse(true);
-        if (isViewer) {
+        if (locked) {
+            sendJson(session, Map.of("type", "error", "error", "album-locked"));
+            return;
+        }
+
+        // B-SEC-01 / N-CORE-05: VIEWER 차단 (Redis 역할 캐시 활용)
+        AlbumRole role = roleCacheService.getRole(albumId, userId);
+        if (role == null || role == AlbumRole.VIEWER) {
             sendJson(session, Map.of("type", "error", "error", "read-only"));
+            return;
+        }
+
+        // N-CORE-12: WS push rate limiting (120 push/min per session)
+        int count = pushCounters
+                .computeIfAbsent(session.getId(), k -> new java.util.concurrent.atomic.AtomicInteger(0))
+                .incrementAndGet();
+        if (count > MAX_PUSH_PER_MINUTE) {
+            sendJson(session, Map.of("type", "error", "error", "rate-limit-exceeded"));
             return;
         }
 
@@ -176,11 +210,27 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
             return;
         }
 
+        // N-CORE-11: 메시지 크기 사전 검증 (10MB)
+        if (incomingJson.length() > 10 * 1024 * 1024) {
+            sendJson(session, Map.of("type", "error", "error", "payload-too-large"));
+            return;
+        }
+
         // LWW merge
         String serverElements = pageDocumentStore.loadElements(pageId);
         String mergedElements = elementDiffApplier.merge(serverElements, incomingJson);
-        long newClock = clockManager.increment(pageId);
 
+        // N-CORE-11: merge 후 non-deleted shape 수 검증 (500개)
+        try {
+            com.nemo.nemo.domain.excalidraw.service.ElementDiffApplier.ElementCountResult countResult =
+                    elementDiffApplier.countNonDeleted(mergedElements);
+            if (countResult.count() > 500) {
+                sendJson(session, Map.of("type", "error", "error", "shape-limit-exceeded"));
+                return;
+            }
+        } catch (Exception ignored) {}
+
+        long newClock = clockManager.increment(pageId);
         pageDocumentStore.applyAndStore(pageId, mergedElements, newClock);
 
         // push_result to sender
@@ -225,6 +275,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         ScheduledFuture<?> timer = keepAliveTimers.remove(session.getId());
         if (timer != null) timer.cancel(false);
 
+        pushCounters.remove(session.getId());
         String pageId = sessionCurrentPage.remove(session.getId());
         roomManager.leave(albumId, session);
 
@@ -236,6 +287,12 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         }
 
         log.info("[Excalidraw] disconnected: sessionId={}, albumId={}, status={}", session.getId(), albumId, status);
+    }
+
+    /** N-CORE-12: 매 분마다 push 카운터 초기화 */
+    @Scheduled(fixedRate = 60_000)
+    public void resetPushCounters() {
+        pushCounters.values().forEach(c -> c.set(0));
     }
 
     private void startKeepAlive(WebSocketSession session) {

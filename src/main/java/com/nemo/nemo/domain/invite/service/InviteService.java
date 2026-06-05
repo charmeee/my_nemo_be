@@ -18,18 +18,28 @@ import com.nemo.nemo.domain.member.repository.MemberRepository;
 import com.nemo.nemo.domain.notification.entity.NotificationType;
 import com.nemo.nemo.domain.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class InviteService {
+
+    private static final String CACHE_PREFIX = "invite:";
+    private static final Duration CACHE_TTL = Duration.ofHours(1);
 
     private final InviteLinkRepository inviteLinkRepository;
     private final AlbumRepository albumRepository;
@@ -37,6 +47,8 @@ public class InviteService {
     private final MemberRepository memberRepository;
     @Lazy
     private final NotificationService notificationService;
+    private final StringRedisTemplate redis;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public InviteLinkResponse createInviteLink(UUID albumId, UUID userId, InviteCreateRequest req) {
@@ -57,6 +69,17 @@ public class InviteService {
     }
 
     public InviteInfoResponse getInviteInfo(String code) {
+        // N-CORE-06: Redis 캐시 우선 조회
+        String cacheKey = CACHE_PREFIX + code;
+        String cached = redis.opsForValue().get(cacheKey);
+        if (cached != null) {
+            try {
+                return objectMapper.readValue(cached, InviteInfoResponse.class);
+            } catch (JacksonException e) {
+                log.debug("invite cache parse error for code={}", code);
+            }
+        }
+
         InviteLink link = inviteLinkRepository.findByCode(code)
                 .orElseThrow(() -> new NemoException(ErrorCode.INVITE_NOT_FOUND));
 
@@ -68,13 +91,31 @@ public class InviteService {
         String inviterNickname = memberRepository.findById(album.getCreatorId())
                 .map(m -> m.getNickname())
                 .orElse(null);
-        return new InviteInfoResponse(
+        InviteInfoResponse response = new InviteInfoResponse(
                 album.getId().toString(),
                 album.getName(),
                 link.getRole().name(),
                 link.isApprovalRequired(),
                 inviterNickname
         );
+
+        try {
+            redis.opsForValue().set(cacheKey, objectMapper.writeValueAsString(response), CACHE_TTL);
+        } catch (JacksonException e) {
+            log.debug("invite cache write error for code={}", code);
+        }
+        return response;
+    }
+
+    /** 앨범의 초대 링크 목록 조회 (ADMIN 전용) */
+    public List<InviteLinkResponse> getInviteLinks(UUID albumId, UUID userId) {
+        albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, userId)
+                .filter(am -> am.getRole() == AlbumRole.ADMIN)
+                .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_ADMIN_REQUIRED));
+
+        return inviteLinkRepository.findByAlbumId(albumId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional
@@ -124,10 +165,13 @@ public class InviteService {
                 .filter(a -> a.getDeletedAt() == null)
                 .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_NOT_FOUND));
 
-        // 기존 활성 링크 모두 비활성화
+        // 기존 활성 링크 모두 비활성화 + 캐시 무효화
         inviteLinkRepository.findByAlbumId(albumId).stream()
                 .filter(InviteLink::isActive)
-                .forEach(InviteLink::deactivate);
+                .forEach(l -> {
+                    l.deactivate();
+                    redis.delete(CACHE_PREFIX + l.getCode());
+                });
 
         String code = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         InviteLink link = InviteLink.create(album, AlbumRole.EDITOR, false, code);
@@ -150,6 +194,7 @@ public class InviteService {
         } else {
             link.deactivate();
         }
+        redis.delete(CACHE_PREFIX + link.getCode());
     }
 
     private InviteLinkResponse toResponse(InviteLink link) {
