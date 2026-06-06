@@ -191,9 +191,8 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         boolean isDelta = !lastClockByPage.isEmpty() &&
                 pages.stream().allMatch(p -> lastClockByPage.containsKey(p.getPageId().toString()));
 
-        // 현재 접속 중인 다른 사용자 목록 (초기 presence 표시용)
+        // 현재 접속 중인 모든 사용자 목록 (자신 포함, 초기 presence 표시용)
         List<Map<String, String>> roomMembers = roomManager.getSessions(albumId).stream()
-                .filter(s -> !s.getId().equals(session.getId()))
                 .filter(s -> s.getAttributes().get("userName") != null)
                 .map(s -> Map.of(
                         "userId", (String) s.getAttributes().getOrDefault("userId", ""),
