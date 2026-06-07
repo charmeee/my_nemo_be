@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -45,6 +46,15 @@ public class ExcalidrawPageController {
             @RequestBody PageUpdateRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(
                 pageService.updatePage(albumId, pageId, UUID.fromString(userId), req)));
+    }
+
+    @GetMapping("/{pageId}/elements")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getPageElements(
+            @PathVariable UUID albumId,
+            @PathVariable UUID pageId,
+            @AuthenticationPrincipal String userId) {
+        List<Object> elements = pageService.getPageElements(albumId, pageId, UUID.fromString(userId));
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("elements", elements)));
     }
 
     @DeleteMapping("/{pageId}")

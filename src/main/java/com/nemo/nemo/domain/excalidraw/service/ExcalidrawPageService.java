@@ -42,6 +42,7 @@ public class ExcalidrawPageService {
     private final AlbumMemberRepository albumMemberRepository;
     private final RoomManager roomManager;
     private final ObjectMapper objectMapper;
+    private final PageDocumentStore pageDocumentStore;
     @Lazy
     private final NotificationService notificationService;
     @Lazy
@@ -110,6 +111,18 @@ public class ExcalidrawPageService {
         page.softDelete();
         trashService.addPageToTrash(pageId, albumId, userId);
         broadcastPageEvent(albumId.toString(), "deleted", pageId.toString(), page.getName(), page.getPageOrder());
+    }
+
+    /** 특정 페이지의 현재 elements 반환 (메모리→Redis→DB 순서) */
+    public List<Object> getPageElements(UUID albumId, UUID pageId, UUID userId) {
+        getMemberOrThrow(albumId, userId);
+        String json = pageDocumentStore.loadElements(pageId.toString());
+        if (json == null || json.isBlank() || json.equals("[]")) return List.of();
+        try {
+            return objectMapper.readValue(json, List.class);
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     /** 게스트 접근용: 멤버십 검증 없이 페이지 목록 반환 */
