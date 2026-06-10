@@ -107,11 +107,12 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         }
 
         switch (type) {
-            case "connect"  -> handleConnect(session, albumId, root);
-            case "push"     -> handlePush(session, albumId, userId, root);
-            case "presence" -> handlePresence(session, albumId, userId, root);
-            case "ping"     -> sendJson(session, Map.of("type", "pong"));
-            default         -> log.debug("[Excalidraw] unknown type: {}", type);
+            case "connect"          -> handleConnect(session, albumId, root);
+            case "push"             -> handlePush(session, albumId, userId, root);
+            case "presence"         -> handlePresence(session, albumId, userId, root);
+            case "excalidraw_file"  -> handleExcalidrawFile(session, albumId, userId, root);
+            case "ping"             -> sendJson(session, Map.of("type", "pong"));
+            default                 -> log.debug("[Excalidraw] unknown type: {}", type);
         }
     }
 
@@ -368,6 +369,18 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
 
         sessionCurrentPage.put(session.getId(), pageId);
         log.debug("[Excalidraw] push handled: pageId={}, newClock={}, diffSize={}", pageId, newClock, diffNodes.size());
+    }
+
+    /** excalidraw_file: 이미지 파일 URL을 다른 세션에 브로드캐스트 */
+    private void handleExcalidrawFile(WebSocketSession session, String albumId, String userId, JsonNode root) {
+        AlbumRole role = roleCacheService.getRole(albumId, userId);
+        if (role == null || role == AlbumRole.VIEWER) return;
+
+        String fileId = root.path("fileId").asText(null);
+        String url = root.path("url").asText(null);
+        if (fileId == null || url == null) return;
+
+        broadcast(albumId, session, Map.of("type", "excalidraw_file", "fileId", fileId, "url", url));
     }
 
     /** presence: cursor + selectedIds 브로드캐스트 */
