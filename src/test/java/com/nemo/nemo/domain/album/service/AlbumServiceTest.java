@@ -10,7 +10,11 @@ import com.nemo.nemo.domain.album.entity.MemberStatus;
 import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
 import com.nemo.nemo.domain.member.entity.Member;
+import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
+import com.nemo.nemo.domain.invite.repository.InviteLinkRepository;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.notification.service.NotificationService;
+import com.nemo.nemo.domain.trash.service.TrashService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,6 +24,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +43,11 @@ class AlbumServiceTest {
     @Mock AlbumRepository albumRepository;
     @Mock AlbumMemberRepository albumMemberRepository;
     @Mock MemberRepository memberRepository;
+    @Mock TrashService trashService;
+    @Mock NotificationService notificationService;
+    @Mock InviteLinkRepository inviteLinkRepository;
+    @Mock ExcalidrawPageRepository excalidrawPageRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks AlbumService albumService;
 
     private UUID userId;

@@ -12,5 +12,5 @@ import java.util.List;
 @Component
 @ConfigurationProperties(prefix = "cors")
 public class CorsProperties {
-    private List<String> allowedOrigins = List.of("http://localhost:5173");
+    private List<String> allowedOrigins = List.of("http://localhost:5173", "http://localhost:5174", "http://localhost:5175");
 }

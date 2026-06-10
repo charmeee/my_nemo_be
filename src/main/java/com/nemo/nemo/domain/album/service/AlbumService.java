@@ -9,14 +9,23 @@ import com.nemo.nemo.domain.album.entity.AlbumRole;
 import com.nemo.nemo.domain.album.entity.MemberStatus;
 import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.album.repository.AlbumRepository;
+import com.nemo.nemo.domain.album.event.AlbumCreatedEvent;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.notification.entity.NotificationType;
+import com.nemo.nemo.domain.notification.service.NotificationService;
+import com.nemo.nemo.domain.sync.service.SessionGuard;
+import com.nemo.nemo.domain.trash.service.TrashService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
 
 @Service
 @Transactional(readOnly = true)
@@ -26,6 +35,12 @@ public class AlbumService {
     private final AlbumRepository albumRepository;
     private final AlbumMemberRepository albumMemberRepository;
     private final MemberRepository memberRepository;
+    @Lazy
+    private final TrashService trashService;
+    private final SessionGuard sessionGuard;
+    @Lazy
+    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AlbumListResponse getMyAlbums(UUID userId) {
         List<Album> ownedAlbums = albumRepository.findByCreatorIdAndDeletedAtIsNull(userId);
@@ -57,6 +72,9 @@ public class AlbumService {
         AlbumMember albumMember = AlbumMember.create(album, member, AlbumRole.ADMIN, MemberStatus.ACTIVE);
         albumMemberRepository.save(albumMember);
 
+        // 초대 링크(N-CORE-01) + 기본 페이지 생성은 AlbumCreatedEventListener에서 처리
+        eventPublisher.publishEvent(new AlbumCreatedEvent(album.getId()));
+
         return toResponse(album, userId);
     }
 
@@ -74,11 +92,32 @@ public class AlbumService {
 
         album.update(req.name(), req.coverImage());
 
+        List<String> memberIds = albumMemberRepository
+                .findByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE).stream()
+                .map(am -> am.getUser().getId().toString())
+                .toList();
+
+        if (req.name() != null || req.coverImage() != null) {
+            for (String memberId : memberIds) {
+                notificationService.send(memberId, NotificationType.ALBUM_UPDATED,
+                        Map.of("albumId", albumId.toString()));
+            }
+        }
+
         if (req.isLocked() != null) {
             if (req.isLocked()) {
                 album.lock();
+                sessionGuard.forceCloseAll(albumId.toString(), "album-locked");
+                for (String memberId : memberIds) {
+                    notificationService.send(memberId, NotificationType.ALBUM_LOCKED,
+                            Map.of("albumId", albumId.toString()));
+                }
             } else {
                 album.unlock();
+                for (String memberId : memberIds) {
+                    notificationService.send(memberId, NotificationType.ALBUM_UNLOCKED,
+                            Map.of("albumId", albumId.toString()));
+                }
             }
         }
 
@@ -92,6 +131,7 @@ public class AlbumService {
         requireAdmin(member);
 
         album.softDelete();
+        trashService.addAlbumToTrash(albumId, userId);
     }
 
     private Album getAlbumOrThrow(UUID albumId) {
@@ -118,6 +158,15 @@ public class AlbumService {
                 .map(am -> am.getRole().name())
                 .orElse(null);
 
+        List<AlbumResponse.MemberAvatar> recentMembers = albumMemberRepository
+                .findByAlbumIdAndStatusOrderByJoinedAt(album.getId(), MemberStatus.ACTIVE)
+                .stream()
+                .limit(4)
+                .map(am -> new AlbumResponse.MemberAvatar(
+                        am.getUser().getNickname(),
+                        am.getUser().getProfileImage()))
+                .toList();
+
         return new AlbumResponse(
                 album.getId().toString(),
                 album.getName(),
@@ -126,7 +175,8 @@ public class AlbumService {
                 album.getCreatedAt() != null ? album.getCreatedAt().toString() : null,
                 album.getUpdatedAt() != null ? album.getUpdatedAt().toString() : null,
                 (int) memberCount,
-                myRole
+                myRole,
+                recentMembers
         );
     }
 }

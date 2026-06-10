@@ -19,4 +19,8 @@ public interface AlbumPageRepository extends JpaRepository<AlbumPage, UUID> {
     @Modifying
     @Query("UPDATE AlbumPage p SET p.deletedAt = null WHERE p.tlPageId = :tlPageId")
     void restorePage(@Param("tlPageId") UUID tlPageId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM AlbumPage p WHERE p.album.id = :albumId")
+    void deleteAllByAlbumId(@Param("albumId") UUID albumId);
 }

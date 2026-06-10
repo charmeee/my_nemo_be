@@ -8,12 +8,19 @@ import com.nemo.nemo.domain.album.entity.AlbumRole;
 import com.nemo.nemo.domain.album.entity.MemberStatus;
 import com.nemo.nemo.domain.album.repository.AlbumMemberRepository;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
+import com.nemo.nemo.domain.notification.entity.NotificationType;
+import com.nemo.nemo.domain.notification.service.NotificationService;
+import com.nemo.nemo.domain.sync.service.SessionGuard;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
 
 @Service
 @Transactional(readOnly = true)
@@ -22,6 +29,13 @@ public class AlbumMemberService {
 
     private final AlbumMemberRepository albumMemberRepository;
     private final MemberRepository memberRepository;
+    private final com.nemo.nemo.domain.album.repository.AlbumRepository albumRepository;
+    private final SessionGuard sessionGuard;
+    @Lazy
+    private final NotificationService notificationService;
+    @Lazy
+    private final com.nemo.nemo.domain.trash.service.TrashService trashService;
+    private final MemberRoleCacheService roleCacheService;
 
     public List<MemberResponse> getMembers(UUID albumId, UUID requesterId) {
         getMemberOrThrow(albumId, requesterId);
@@ -40,6 +54,9 @@ public class AlbumMemberService {
         requireAdmin(albumId, requesterId);
         AlbumMember target = getPendingMemberOrThrow(albumId, targetUserId);
         target.approve();
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
+        notificationService.send(targetUserId.toString(), NotificationType.JOIN_APPROVED,
+                Map.of("albumId", albumId.toString()));
     }
 
     @Transactional
@@ -47,6 +64,9 @@ public class AlbumMemberService {
         requireAdmin(albumId, requesterId);
         AlbumMember target = getPendingMemberOrThrow(albumId, targetUserId);
         target.reject();
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
+        notificationService.send(targetUserId.toString(), NotificationType.JOIN_REJECTED,
+                Map.of("albumId", albumId.toString()));
     }
 
     @Transactional
@@ -61,7 +81,16 @@ public class AlbumMemberService {
         }
 
         AlbumMember target = getMemberOrThrow(albumId, targetUserId);
+        AlbumRole oldRole = target.getRole();
         target.changeRole(newRole);
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
+
+        notificationService.send(targetUserId.toString(), NotificationType.ROLE_CHANGED,
+                Map.of("albumId", albumId.toString(), "newRole", newRole.name()));
+
+        if (oldRole != AlbumRole.VIEWER && newRole == AlbumRole.VIEWER) {
+            sessionGuard.forceClose(albumId.toString(), targetUserId.toString(), "role-downgraded");
+        }
     }
 
     @Transactional
@@ -73,7 +102,16 @@ public class AlbumMemberService {
         }
 
         AlbumMember target = getMemberOrThrow(albumId, targetUserId);
+        sessionGuard.forceClose(albumId.toString(), targetUserId.toString(), "kicked");
         albumMemberRepository.delete(target);
+        roleCacheService.invalidate(albumId.toString(), targetUserId.toString());
+
+        if (albumMemberRepository.countByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE) == 0) {
+            albumRepository.findById(albumId).ifPresent(album -> {
+                album.softDelete();
+                trashService.addAlbumToTrash(albumId, requesterId);
+            });
+        }
     }
 
     @Transactional
@@ -84,7 +122,49 @@ public class AlbumMemberService {
             throw new NemoException(ErrorCode.ADMIN_MUST_TRANSFER);
         }
 
+        String adminId = albumMemberRepository.findByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE).stream()
+                .filter(am -> am.getRole() == AlbumRole.ADMIN)
+                .map(am -> am.getUser().getId().toString())
+                .findFirst().orElse(null);
+
         albumMemberRepository.delete(member);
+        roleCacheService.invalidate(albumId.toString(), userId.toString());
+
+        if (adminId != null) {
+            notificationService.send(adminId, NotificationType.MEMBER_LEFT,
+                    Map.of("albumId", albumId.toString(), "userId", userId.toString()));
+        }
+
+        if (albumMemberRepository.countByAlbumIdAndStatus(albumId, MemberStatus.ACTIVE) == 0) {
+            albumRepository.findById(albumId).ifPresent(album -> {
+                album.softDelete();
+                trashService.addAlbumToTrash(albumId, userId);
+            });
+        }
+    }
+
+    @Transactional
+    public void inviteByEmail(UUID albumId, String email, AlbumRole role, UUID requesterId) {
+        requireAdmin(albumId, requesterId);
+
+        com.nemo.nemo.domain.member.entity.Member target = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new com.nemo.nemo.common.exception.NemoException(
+                        com.nemo.nemo.common.exception.ErrorCode.MEMBER_NOT_FOUND));
+
+        albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, target.getId())
+                .ifPresent(am -> { throw new com.nemo.nemo.common.exception.NemoException(
+                        com.nemo.nemo.common.exception.ErrorCode.MEMBER_ALREADY_IN_ALBUM); });
+
+        com.nemo.nemo.domain.album.entity.Album album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new com.nemo.nemo.common.exception.NemoException(
+                        com.nemo.nemo.common.exception.ErrorCode.ALBUM_NOT_FOUND));
+
+        AlbumMember newMember = AlbumMember.create(album, target, role, MemberStatus.PENDING);
+        albumMemberRepository.save(newMember);
+        roleCacheService.invalidate(albumId.toString(), target.getId().toString());
+
+        notificationService.send(target.getId().toString(), NotificationType.ALBUM_INVITATION,
+                Map.of("albumId", albumId.toString(), "albumName", album.getName()));
     }
 
     @Transactional

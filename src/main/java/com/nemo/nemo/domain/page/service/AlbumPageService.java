@@ -12,7 +12,9 @@ import com.nemo.nemo.domain.album.repository.AlbumRepository;
 import com.nemo.nemo.domain.page.dto.PageThumbnailResponse;
 import com.nemo.nemo.domain.page.entity.AlbumPage;
 import com.nemo.nemo.domain.page.repository.AlbumPageRepository;
+import com.nemo.nemo.domain.trash.service.TrashService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +34,8 @@ public class AlbumPageService {
     private final AlbumMemberRepository albumMemberRepository;
     private final AlbumRepository albumRepository;
     private final AppProperties appProperties;
+    @Lazy
+    private final TrashService trashService;
 
     @Transactional(readOnly = true)
     public List<PageThumbnailResponse> getPages(UUID albumId, UUID userId) {
@@ -90,6 +94,7 @@ public class AlbumPageService {
                 .orElseThrow(() -> new NemoException(ErrorCode.IMAGE_NOT_FOUND));
 
         page.softDelete();
+        trashService.addPageToTrash(tlPageId, albumId, userId);
     }
 
     private AlbumMember getMemberOrThrow(UUID albumId, UUID userId) {
