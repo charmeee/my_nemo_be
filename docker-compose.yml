@@ -9,6 +9,8 @@ services:
       - .env
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      - nemo_uploads:/app/data/uploads
     networks:
       - infra-net
     restart: unless-stopped
@@ -16,3 +18,6 @@ services:
 networks:
   infra-net:
     external: true
+
+volumes:
+  nemo_uploads:
