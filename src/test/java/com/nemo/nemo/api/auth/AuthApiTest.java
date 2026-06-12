@@ -78,4 +78,125 @@ class AuthApiTest extends ApiE2ETestBase {
 
         assertThat(statusOf(get("/albums", aliceToken))).isEqualTo(401);
     }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-07: GET /auth/me → 자기 정보 반환")
+    void auth07_me_returnsSelfInfo() throws Exception {
+        var resp = get("/auth/me", aliceToken);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        var data = json(resp).path("data");
+        assertThat(data.path("id").asText()).isEqualTo(aliceId);
+        assertThat(data.path("nickname").asText()).isEqualTo("Alice");
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-08: register 신규 이메일 → 토큰 + Set-Cookie(refreshToken)")
+    void auth08_register_success_setsCookie() throws Exception {
+        String email = "reg-" + UUID.randomUUID() + "@test.com";
+        String body = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "passW0rd!", "nickname", "Reg"));
+
+        var resp = postNoAuth("/auth/register", body);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        assertThat(json(resp).path("data").path("accessToken").asText()).isNotBlank();
+        assertThat(resp.getHeaders().get("Set-Cookie")).isNotNull();
+        assertThat(resp.getHeaders().get("Set-Cookie").stream()
+                .anyMatch(c -> c.startsWith("refreshToken="))).isTrue();
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-09: register 중복 이메일 → 409 EMAIL_ALREADY_EXISTS")
+    void auth09_register_duplicateEmail_409() throws Exception {
+        String email = "dup-" + UUID.randomUUID() + "@test.com";
+        String body = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "passW0rd!", "nickname", "Dup"));
+
+        assertThat(statusOf(postNoAuth("/auth/register", body))).isEqualTo(200);
+        assertThat(statusOf(postNoAuth("/auth/register", body))).isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-10: login 성공 → accessToken 반환")
+    void auth10_login_success() throws Exception {
+        String email = "login-" + UUID.randomUUID() + "@test.com";
+        String regBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "passW0rd!", "nickname", "Login"));
+        postNoAuth("/auth/register", regBody);
+
+        String loginBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "passW0rd!"));
+        var resp = postNoAuth("/auth/login", loginBody);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        assertThat(json(resp).path("data").path("accessToken").asText()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-11: login 잘못된 비밀번호 → 401 INVALID_CREDENTIALS")
+    void auth11_login_wrongPassword_401() throws Exception {
+        String email = "wrongpw-" + UUID.randomUUID() + "@test.com";
+        String regBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "passW0rd!", "nickname", "Wrong"));
+        postNoAuth("/auth/register", regBody);
+
+        String loginBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "wrongPW"));
+        assertThat(statusOf(postNoAuth("/auth/login", loginBody))).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-12: login 존재하지 않는 이메일 → 401 INVALID_CREDENTIALS")
+    void auth12_login_unknownEmail_401() throws Exception {
+        String loginBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", "nobody-" + UUID.randomUUID() + "@test.com",
+                "password", "anything"));
+        assertThat(statusOf(postNoAuth("/auth/login", loginBody))).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-13: refresh — 쿠키 없으면 4xx REFRESH_TOKEN_NOT_FOUND")
+    void auth13_refresh_noCookie_4xx() throws Exception {
+        org.springframework.http.HttpHeaders h = new org.springframework.http.HttpHeaders();
+        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        var resp = rest.exchange(url("/auth/refresh"),
+                org.springframework.http.HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(null, h),
+                String.class);
+        assertThat(statusOf(resp)).isBetween(400, 499);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-14: refresh — 잘못된 쿠키 토큰 → 4xx INVALID_TOKEN")
+    void auth14_refresh_invalidCookie_4xx() throws Exception {
+        org.springframework.http.HttpHeaders h = new org.springframework.http.HttpHeaders();
+        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        h.add("Cookie", "refreshToken=garbage.value.here");
+        var resp = rest.exchange(url("/auth/refresh"),
+                org.springframework.http.HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(null, h),
+                String.class);
+        assertThat(statusOf(resp)).isBetween(400, 499);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-AUTH-15: refresh — register로 받은 쿠키로 새 accessToken 발급")
+    void auth15_refresh_validCookie_returnsNewToken() throws Exception {
+        String email = "refresh-" + UUID.randomUUID() + "@test.com";
+        String body = objectMapper.writeValueAsString(java.util.Map.of(
+                "email", email, "password", "passW0rd!", "nickname", "Refresh"));
+        var regResp = postNoAuth("/auth/register", body);
+        String refreshCookie = regResp.getHeaders().get("Set-Cookie").stream()
+                .filter(c -> c.startsWith("refreshToken="))
+                .map(c -> c.split(";")[0])
+                .findFirst().orElseThrow();
+
+        org.springframework.http.HttpHeaders h = new org.springframework.http.HttpHeaders();
+        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        h.add("Cookie", refreshCookie);
+        var resp = rest.exchange(url("/auth/refresh"),
+                org.springframework.http.HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(null, h),
+                String.class);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        assertThat(json(resp).path("data").path("accessToken").asText()).isNotBlank();
+    }
 }

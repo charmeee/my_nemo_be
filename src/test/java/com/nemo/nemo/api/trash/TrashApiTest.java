@@ -112,4 +112,74 @@ class TrashApiTest extends ApiE2ETestBase {
         assertThat(statusOf(post("/trash/" + trashId + "/restore", bobToken, null))).isEqualTo(403);
         assertThat(statusOf(delete("/trash/" + trashId, bobToken))).isEqualTo(403);
     }
+
+    @Test
+    @DisplayName("TC-API-E2E-TRASH-05: 존재하지 않는 trashId 복원 → 404")
+    void trash05_restoreNonExistent_404() throws Exception {
+        String fakeTrashId = java.util.UUID.randomUUID().toString();
+        assertThat(statusOf(post("/trash/" + fakeTrashId + "/restore", aliceToken, null))).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-TRASH-06: 존재하지 않는 trashId 영구삭제 → 404")
+    void trash06_permanentDeleteNonExistent_404() throws Exception {
+        String fakeTrashId = java.util.UUID.randomUUID().toString();
+        assertThat(statusOf(delete("/trash/" + fakeTrashId, aliceToken))).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-TRASH-08: 이미지 포함 앨범 영구 삭제 → 이미지 파일/레코드 cleanup")
+    void trash08_permanentDeleteAlbumWithImages_cleansUp() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 영구삭제이미지");
+        // 이미지 2개 업로드
+        assertThat(statusOf(upload("/albums/" + albumId + "/images", aliceToken, fakejpeg("file"))))
+                .isEqualTo(200);
+        assertThat(statusOf(upload("/albums/" + albumId + "/images", aliceToken, fakejpeg("file"))))
+                .isEqualTo(200);
+
+        // 앨범 삭제 → trash
+        String trashId = deleteAlbumAndGetTrashId(aliceToken, albumId);
+        assertThat(trashId).isNotNull();
+
+        // 영구 삭제 (이미지 cleanup 분기 실행)
+        assertThat(statusOf(delete("/trash/" + trashId, aliceToken))).isEqualTo(200);
+
+        // 앨범 자체가 사라짐
+        assertThat(statusOf(get("/albums/" + albumId, aliceToken))).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-TRASH-07: 페이지 복원 → 페이지가 다시 보임")
+    void trash07_restorePage_pageReappears() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 페이지복원");
+
+        // 페이지 추가
+        var addPage = post("/albums/" + albumId + "/pages", aliceToken, "{\"name\":\"복원될페이지\"}");
+        String pageId = json(addPage).path("data").path("pageId").asText();
+
+        // 페이지 삭제 → trash에 들어감
+        assertThat(statusOf(delete("/albums/" + albumId + "/pages/" + pageId, aliceToken))).isEqualTo(200);
+
+        // trash에서 PAGE 타입 id 확보
+        String pageTrashId = null;
+        for (var item : json(get("/trash", aliceToken)).path("data")) {
+            if ("PAGE".equalsIgnoreCase(item.path("type").asText())
+                    && pageId.equals(item.path("referenceId").asText())) {
+                pageTrashId = item.path("id").asText();
+                break;
+            }
+        }
+        assertThat(pageTrashId).isNotNull();
+
+        // 복원
+        assertThat(statusOf(post("/trash/" + pageTrashId + "/restore", aliceToken, null))).isEqualTo(200);
+
+        // 페이지 목록에 다시 등장
+        var pages = json(get("/albums/" + albumId + "/pages", aliceToken)).path("data");
+        boolean restored = false;
+        for (var p : pages) {
+            if (pageId.equals(p.path("pageId").asText())) { restored = true; break; }
+        }
+        assertThat(restored).isTrue();
+    }
 }
