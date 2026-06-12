@@ -109,4 +109,103 @@ class InviteApiTest extends ApiE2ETestBase {
         }
         assertThat(count).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-07: GET /albums/{id}/invite — 초대 링크 목록 조회")
+    void invite07_listInviteLinks_200() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 초대목록");
+        createInviteLink(aliceToken, albumId, "EDITOR", false);
+        createInviteLink(aliceToken, albumId, "VIEWER", true);
+
+        var resp = get("/albums/" + albumId + "/invite", aliceToken);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        var data = json(resp).path("data");
+        assertThat(data.isArray()).isTrue();
+        assertThat(data.size()).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-08: GET /invite/{code}/info — 비로그인도 정보 조회 가능")
+    void invite08_inviteInfo_200() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 초대정보");
+        String code = createInviteLink(aliceToken, albumId, "EDITOR", true);
+
+        var resp = get("/invite/" + code + "/info", bobToken);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        var data = json(resp).path("data");
+        assertThat(data.path("role").asText()).isEqualTo("EDITOR");
+        assertThat(data.path("approvalRequired").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-09: GET /invite/{code}/info — 존재하지 않는 코드 → 404")
+    void invite09_inviteInfo_notFound_404() throws Exception {
+        var resp = get("/invite/nonexistent-" + UUID.randomUUID() + "/info", bobToken);
+        assertThat(statusOf(resp)).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-10: POST /albums/{id}/invite/reissue — 새 코드 발급")
+    void invite10_reissue_returnsNewCode() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 재발급");
+        String originalCode = createInviteLink(aliceToken, albumId, "EDITOR", false);
+
+        var resp = post("/albums/" + albumId + "/invite/reissue", aliceToken, null);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        String newCode = json(resp).path("data").path("code").asText();
+        assertThat(newCode).isNotBlank();
+        assertThat(newCode).isNotEqualTo(originalCode);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-11: POST /invite/{code}/guest-session — guestToken 발급")
+    void invite11_guestSession_returnsToken() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 게스트세션");
+        String code = createInviteLink(aliceToken, albumId, "VIEWER", false);
+
+        var resp = postNoAuth("/invite/" + code + "/guest-session", null);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        var data = json(resp).path("data");
+        assertThat(data.path("guestToken").asText()).isNotBlank();
+        assertThat(data.path("albumId").asText()).isEqualTo(albumId);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-12: guest-session — 존재하지 않는 코드 → 404")
+    void invite12_guestSession_notFound_404() throws Exception {
+        var resp = postNoAuth("/invite/no-such-code/guest-session", null);
+        assertThat(statusOf(resp)).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-13: guest-session — 비활성 링크 → 410")
+    void invite13_guestSession_inactive_410() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 게스트비활성");
+        String body = objectMapper.writeValueAsString(Map.of("role", "VIEWER", "approvalRequired", false));
+        var createResp = post("/albums/" + albumId + "/invite", aliceToken, body);
+        var linkJson = json(createResp).path("data");
+        String code = linkJson.path("code").asText();
+        String linkId = linkJson.path("id").asText();
+        patch("/albums/" + albumId + "/invite/" + linkId + "?active=false", aliceToken, null);
+
+        var resp = postNoAuth("/invite/" + code + "/guest-session", null);
+        assertThat(statusOf(resp)).isEqualTo(410);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-INVITE-14: GET /invite/{code}/pages — 게스트가 페이지 목록 조회")
+    void invite14_guestPages_200() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 게스트페이지");
+        String code = createInviteLink(aliceToken, albumId, "VIEWER", false);
+
+        org.springframework.http.ResponseEntity<String> resp = rest.exchange(
+                url("/invite/" + code + "/pages"),
+                org.springframework.http.HttpMethod.GET,
+                new org.springframework.http.HttpEntity<>(new org.springframework.http.HttpHeaders()),
+                String.class);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        var data = json(resp).path("data");
+        assertThat(data.isArray()).isTrue();
+        assertThat(data.size()).isGreaterThanOrEqualTo(1);
+    }
 }

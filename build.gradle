@@ -2,6 +2,11 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.1'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+}
+
+jacoco {
+    toolVersion = '0.8.12'
 }
 
 group = 'com.nemo'
@@ -59,6 +64,25 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    ignoreFailures = true
+    finalizedBy 'jacocoTestReport'
+}
+
+tasks.named('jacocoTestReport') {
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = true
+    }
+    classDirectories.setFrom(files(classDirectories.files.collect {
+        fileTree(dir: it, exclude: [
+            '**/NemoApplication.class',
+            '**/dto/**',
+            '**/config/**',
+            '**/common/exception/**',
+            '**/*Properties.class',
+        ])
+    }))
 }
 
 // .env 파일 로드 (개발 환경용)

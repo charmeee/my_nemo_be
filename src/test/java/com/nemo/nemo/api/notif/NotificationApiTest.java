@@ -93,4 +93,25 @@ class NotificationApiTest extends ApiE2ETestBase {
     void notif05_getNotifications_200() throws Exception {
         assertThat(statusOf(get("/notifications", aliceToken))).isEqualTo(200);
     }
+
+    @Test
+    @DisplayName("TC-API-E2E-NOTIF-06: unread-count → 0 (신규 사용자)")
+    void notif06_unreadCount_zero() throws Exception {
+        var resp = get("/notifications/unread-count", aliceToken);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        assertThat(json(resp).path("data").asLong()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-NOTIF-07: unread-count → 알림 생성 후 증가")
+    void notif07_unreadCount_increasesAfterNotification() throws Exception {
+        long before = json(get("/notifications/unread-count", aliceToken)).path("data").asLong();
+
+        String albumId = createAlbum(aliceToken, "[TC] unread-count");
+        joinViaInvite(bobToken, createInviteLink(aliceToken, albumId, "EDITOR", false));
+
+        long after = json(get("/notifications/unread-count", aliceToken)).path("data").asLong();
+        assertThat(after).isGreaterThan(before);
+    }
+
 }

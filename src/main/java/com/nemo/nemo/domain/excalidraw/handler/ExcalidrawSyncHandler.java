@@ -76,7 +76,8 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) {
         String albumId = (String) session.getAttributes().get("albumId");
         String userId = (String) session.getAttributes().get("userId");
-        roomManager.join(albumId, session);
+        // 인증되지 않은 세션이 broadcast(user_joined/patch 등)를 받지 못하도록
+        // roomManager.join은 handleConnect 마지막에서 호출한다.
         startKeepAlive(session);
         log.info("[Excalidraw] connected: sessionId={}, albumId={}, userId={}", session.getId(), albumId, userId);
     }
@@ -261,12 +262,15 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
             ));
         }
 
-        // user_joined 브로드캐스트
+        // user_joined 브로드캐스트 (자신 제외 — broadcast 내부에서 sender 제외)
         broadcast(albumId, session, Map.of(
                 "type", "user_joined",
                 "userId", userId,
                 "userName", userName
         ));
+
+        // 인증 + connected 응답 + user_joined broadcast 이후에 room 등록
+        roomManager.join(albumId, session);
 
         log.debug("[Excalidraw] connect handled: albumId={}, pages={}, delta={}", albumId, pages.size(), isDelta);
     }

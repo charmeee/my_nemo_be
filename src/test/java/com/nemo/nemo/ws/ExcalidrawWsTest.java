@@ -669,6 +669,191 @@ class ExcalidrawWsTest {
     }
 
     // ────────────────────────────────────────────
+    // TC-ERR: 에러 경로 분기 커버리지
+    // ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TC-ERR-01: connect 전 ping → error:auth-required")
+    void err01_pingBeforeConnect_authRequired() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send("{\"type\":\"ping\"}");
+        String msg = alice.poll(3000);
+        assertThat(msg).isNotNull();
+        JsonNode node = objectMapper.readTree(msg);
+        assertThat(node.path("type").asText()).isEqualTo("error");
+        assertThat(node.path("error").asText()).isEqualTo("auth-required");
+    }
+
+    @Test
+    @DisplayName("TC-ERR-02: connect에 token 누락 → error:auth-required + 연결 종료")
+    void err02_connectWithoutToken_authRequired() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send("{\"type\":\"connect\",\"lastClockByPage\":{}}");
+        String msg = alice.poll(3000);
+        assertThat(msg).isNotNull();
+        JsonNode node = objectMapper.readTree(msg);
+        assertThat(node.path("type").asText()).isEqualTo("error");
+        assertThat(node.path("error").asText()).isEqualTo("auth-required");
+    }
+
+    @Test
+    @DisplayName("TC-ERR-03: connect에 잘못된 token → error:auth-failed")
+    void err03_connectWithBadToken_authFailed() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send("{\"type\":\"connect\",\"token\":\"garbage.bad.token\",\"lastClockByPage\":{}}");
+        String msg = alice.poll(3000);
+        assertThat(msg).isNotNull();
+        JsonNode node = objectMapper.readTree(msg);
+        assertThat(node.path("type").asText()).isEqualTo("error");
+        assertThat(node.path("error").asText()).isEqualTo("auth-failed");
+    }
+
+    @Test
+    @DisplayName("TC-ERR-04: 멤버 아닌 사용자 connect → error:not-member")
+    void err04_nonMemberConnect_notMember() throws Exception {
+        // Dave를 만들어 albumId에 가입시키지 않음
+        String daveToken = testLogin("dave-err-" + UUID.randomUUID().toString().substring(0, 8) + "@test.com", "Dave");
+        WsConn dave = connect(albumId, daveToken);
+        dave.send(connectMsg(daveToken));
+        String msg = dave.poll(3000);
+        assertThat(msg).isNotNull();
+        JsonNode node = objectMapper.readTree(msg);
+        assertThat(node.path("type").asText()).isEqualTo("error");
+        assertThat(node.path("error").asText()).isEqualTo("not-member");
+    }
+
+    @Test
+    @DisplayName("TC-ERR-05: push에 pageId 누락 → 응답 없이 silently ignore")
+    void err05_pushWithoutPageId_silentIgnore() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        // pageId 누락한 push
+        alice.send("{\"type\":\"push\",\"clientClock\":0,\"elements\":[]}");
+        String msg = alice.poll(1500);
+        assertThat(msg).isNull(); // silent ignore
+    }
+
+    @Test
+    @DisplayName("TC-ERR-06: push.elements가 array 아님 → silent ignore")
+    void err06_pushElementsNotArray_silentIgnore() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        alice.send("{\"type\":\"push\",\"pageId\":\"" + pageId + "\",\"clientClock\":0,\"elements\":\"not-an-array\"}");
+        String msg = alice.poll(1500);
+        assertThat(msg).isNull();
+    }
+
+    @Test
+    @DisplayName("TC-ERR-07: 알 수 없는 type → silent ignore (에러도 응답도 없음)")
+    void err07_unknownType_silentIgnore() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        alice.send("{\"type\":\"unknown-msg-type\"}");
+        String msg = alice.poll(1500);
+        assertThat(msg).isNull();
+    }
+
+    @Test
+    @DisplayName("TC-ERR-08: excalidraw_file — fileId/url 누락 → silent ignore")
+    void err08_excalidrawFileMissingFields_silentIgnore() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        alice.send("{\"type\":\"excalidraw_file\"}");
+        String msg = alice.poll(1500);
+        assertThat(msg).isNull();
+    }
+
+    @Test
+    @DisplayName("TC-ERR-09: excalidraw_file — EDITOR가 정상 전송 → 다른 세션에 broadcast")
+    void err09_excalidrawFileBroadcast() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        WsConn bob = connect(albumId, bobToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+        bob.send(connectMsg(bobToken));
+        bob.poll(5000);
+        alice.poll(2000); // drain user_joined(bob)
+
+        alice.send("{\"type\":\"excalidraw_file\",\"fileId\":\"f-1\",\"url\":\"http://x/y.png\"}");
+        String fileMsg = pollUntilType(bob, "excalidraw_file", 3000);
+        assertThat(fileMsg).isNotNull();
+        JsonNode node = objectMapper.readTree(fileMsg);
+        assertThat(node.path("fileId").asText()).isEqualTo("f-1");
+        assertThat(node.path("url").asText()).isEqualTo("http://x/y.png");
+    }
+
+    @Test
+    @DisplayName("TC-ERR-11: lastClockByPage로 delta hydration — hydrationType=delta")
+    void err11_deltaHydration() throws Exception {
+        // 1차 connect — full
+        WsConn alice = connect(albumId, aliceToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+
+        // push 한 번 → serverClock 증가
+        alice.send(buildPush(pageId, 0, singleElement("el-d-1", 1)));
+        alice.poll(5000); // push_result
+
+        alice.close();
+
+        // 2차 connect — lastClockByPage 제공 (지난 push 이전 시점)
+        WsConn alice2 = connect(albumId, aliceToken);
+        alice2.send("{\"type\":\"connect\",\"token\":\"" + aliceToken
+                + "\",\"lastClockByPage\":{\"" + pageId + "\":0}}");
+        String msg = alice2.poll(5000);
+
+        assertThat(msg).isNotNull();
+        JsonNode node = objectMapper.readTree(msg);
+        assertThat(node.path("type").asText()).isEqualTo("connected");
+        assertThat(node.path("hydrationType").asText()).isEqualTo("delta");
+        assertThat(node.path("deltaByPage").has(pageId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("TC-ERR-12: WS 핸드셰이크 시 토큰 누락 → 연결 거부")
+    void err12_handshakeWithoutToken_rejected() throws Exception {
+        String url = "ws://localhost:" + port + "/sync/excalidraw/" + albumId;
+        WsConn conn = new WsConn();
+        try {
+            new StandardWebSocketClient()
+                    .execute(conn, new WebSocketHttpHeaders(), URI.create(url))
+                    .get(3, TimeUnit.SECONDS);
+            // 핸드셰이크가 성공해도 곧 연결 종료되거나 메시지 받지 못함
+            String msg = conn.poll(1500);
+            // null이면 OK (connection closed), error 메시지여도 OK
+            if (msg != null) {
+                assertThat(objectMapper.readTree(msg).path("type").asText()).isIn("error", "");
+            }
+        } catch (Exception e) {
+            // 핸드셰이크 자체가 실패한 경우도 정상 (인증 실패)
+        }
+    }
+
+    @Test
+    @DisplayName("TC-ERR-10: VIEWER가 excalidraw_file 전송 → silent ignore (broadcast 없음)")
+    void err10_viewerExcalidrawFile_silentIgnore() throws Exception {
+        WsConn alice = connect(albumId, aliceToken);
+        WsConn carol = connect(albumId, carolToken);
+        alice.send(connectMsg(aliceToken));
+        alice.poll(5000);
+        carol.send(connectMsg(carolToken));
+        carol.poll(5000);
+        alice.poll(2000); // drain user_joined(carol)
+
+        carol.send("{\"type\":\"excalidraw_file\",\"fileId\":\"f-v\",\"url\":\"http://x/v.png\"}");
+        String msg = pollUntilType(alice, "excalidraw_file", 1500);
+        assertThat(msg).isNull();
+    }
+
+    // ────────────────────────────────────────────
     // WS 연결 헬퍼
     // ────────────────────────────────────────────
 

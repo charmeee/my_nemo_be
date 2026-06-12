@@ -60,6 +60,86 @@ class ImageApiTest extends ApiE2ETestBase {
     }
 
     @Test
+    @DisplayName("TC-API-E2E-IMG-06: GET /albums/{id}/images — 업로드 후 리스트에 등장")
+    void img06_listImages_returnsUploaded() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 이미지목록");
+        upload("/albums/" + albumId + "/images", aliceToken, fakejpeg("file"));
+        upload("/albums/" + albumId + "/images", aliceToken, fakejpeg("file"));
+
+        var resp = get("/albums/" + albumId + "/images", aliceToken);
+        assertThat(statusOf(resp)).isEqualTo(200);
+        assertThat(json(resp).path("data").size()).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-IMG-07: GET images — 비멤버 → 403")
+    void img07_listImages_nonMember_403() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 이미지비멤버");
+        assertThat(statusOf(get("/albums/" + albumId + "/images", bobToken))).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-IMG-08: 업로더 본인이 이미지 삭제 → 200")
+    void img08_deleteOwnImage_200() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 본인삭제");
+        var uploadResp = upload("/albums/" + albumId + "/images", aliceToken, fakejpeg("file"));
+        String imageId = json(uploadResp).path("data").path("id").asText();
+
+        assertThat(statusOf(delete("/albums/" + albumId + "/images/" + imageId, aliceToken))).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-IMG-09: ADMIN이 타인 이미지 삭제 → 200")
+    void img09_adminDeleteOthersImage_200() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] ADMIN타인삭제");
+        joinViaInvite(bobToken, createInviteLink(aliceToken, albumId, "EDITOR", false));
+
+        var uploadResp = upload("/albums/" + albumId + "/images", bobToken, fakejpeg("file"));
+        String imageId = json(uploadResp).path("data").path("id").asText();
+
+        assertThat(statusOf(delete("/albums/" + albumId + "/images/" + imageId, aliceToken))).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-IMG-10: 일반 EDITOR가 타인 이미지 삭제 → 403")
+    void img10_editorDeleteOthersImage_403() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] EDITOR타인차단");
+        joinViaInvite(bobToken, createInviteLink(aliceToken, albumId, "EDITOR", false));
+        joinViaInvite(carolToken, createInviteLink(aliceToken, albumId, "EDITOR", false));
+
+        // Bob 업로드
+        var uploadResp = upload("/albums/" + albumId + "/images", bobToken, fakejpeg("file"));
+        String imageId = json(uploadResp).path("data").path("id").asText();
+
+        // Carol(EDITOR)이 Bob 이미지 삭제 → 403
+        assertThat(statusOf(delete("/albums/" + albumId + "/images/" + imageId, carolToken))).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-IMG-11: 존재하지 않는 imageId 삭제 → 404")
+    void img11_deleteNonExistentImage_404() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 없는이미지");
+        String fakeImageId = java.util.UUID.randomUUID().toString();
+        assertThat(statusOf(delete("/albums/" + albumId + "/images/" + fakeImageId, aliceToken))).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("TC-API-E2E-IMG-12: 잠긴 앨범에 EDITOR 업로드 → 403 (ALBUM_LOCKED)")
+    void img12_lockedAlbum_editorUpload_403() throws Exception {
+        String albumId = createAlbum(aliceToken, "[TC] 잠긴앨범업로드");
+        joinViaInvite(bobToken, createInviteLink(aliceToken, albumId, "EDITOR", false));
+
+        // 앨범 잠금
+        patch("/albums/" + albumId, aliceToken, "{\"isLocked\":true}");
+
+        // EDITOR(Bob) 업로드 시도 → 403
+        assertThat(statusOf(upload("/albums/" + albumId + "/images", bobToken, fakejpeg("file")))).isEqualTo(403);
+
+        // ADMIN(Alice)은 잠겨도 업로드 가능 → 200
+        assertThat(statusOf(upload("/albums/" + albumId + "/images", aliceToken, fakejpeg("file")))).isEqualTo(200);
+    }
+
+    @Test
     @DisplayName("TC-API-E2E-IMG-05: 비멤버가 이미지 URL 접근 → 401/403")
     void img05_nonMemberAccess_401or403() throws Exception {
         String albumId = createAlbum(aliceToken, "[TC] 비멤버이미지");

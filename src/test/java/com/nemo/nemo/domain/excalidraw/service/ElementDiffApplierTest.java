@@ -216,4 +216,60 @@ class ElementDiffApplierTest {
         assertThat(diff).hasSize(1);
         assertThat(diff.get(0).path("isDeleted").booleanValue()).isTrue();
     }
+
+    @Test
+    @DisplayName("merge — incoming이 array 아닐 때 서버 상태 그대로, rebased=false")
+    void merge_incoming_not_array() {
+        String server = "[{\"id\":\"a\",\"version\":1,\"versionNonce\":1}]";
+        ElementDiffApplier.MergeResult result = applier.merge(server, "{\"not\":\"array\"}");
+        assertThat(result.elements()).isEqualTo(server);
+        assertThat(result.rebased()).isFalse();
+    }
+
+    @Test
+    @DisplayName("merge — incoming에 id 누락된 element 포함 시 해당 element만 skip")
+    void merge_incoming_with_null_id_skipped() {
+        String server = "[]";
+        String incoming = """
+                [
+                  {"version":1,"versionNonce":1},
+                  {"id":"b","version":1,"versionNonce":1}
+                ]
+                """;
+        ElementDiffApplier.MergeResult result = applier.merge(server, incoming);
+        assertThat(result.elements()).contains("\"id\":\"b\"");
+        assertThat(result.elements()).doesNotContain("\"id\":null");
+    }
+
+    @Test
+    @DisplayName("merge — 잘못된 JSON 입력 → catch 블록, 서버 상태 그대로 반환")
+    void merge_invalid_json_returns_server() {
+        String server = "[{\"id\":\"a\",\"version\":1,\"versionNonce\":1}]";
+        ElementDiffApplier.MergeResult result = applier.merge(server, "not-json-at-all{");
+        assertThat(result.elements()).isEqualTo(server);
+        assertThat(result.rebased()).isFalse();
+    }
+
+    @Test
+    @DisplayName("getDiffElements — 잘못된 JSON → 빈 리스트")
+    void getDiffElements_invalid_json_returns_empty() {
+        List<JsonNode> diff = applier.getDiffElements("not-json", "[]");
+        assertThat(diff).isEmpty();
+    }
+
+    @Test
+    @DisplayName("countNonDeleted — array 아닌 입력 → 0 반환")
+    void countNonDeleted_non_array_zero() throws Exception {
+        ElementDiffApplier.ElementCountResult result = applier.countNonDeleted("{\"not\":\"array\"}");
+        assertThat(result.count()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("parseToMap (via merge) — 빈 문자열/공백 서버 → 모두 신규로 처리")
+    void merge_blank_server_treats_as_empty() {
+        String incoming = "[{\"id\":\"a\",\"version\":1,\"versionNonce\":1}]";
+        ElementDiffApplier.MergeResult result = applier.merge("   ", incoming);
+        assertThat(result.elements()).contains("\"id\":\"a\"");
+        assertThat(result.rebased()).isFalse();
+    }
 }
