@@ -1,0 +1,18 @@
+# 운영 배포용 compose
+# - DB/Redis 는 공용 infra (jenkinsController/infra) 의 컨테이너 재사용
+# - 개발용 db/redis 가 필요할 땐 compose.yaml (별도 파일) 사용
+services:
+  app:
+    build: .
+    container_name: nemo-be
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - infra-net
+    restart: unless-stopped
+
+networks:
+  infra-net:
+    external: true

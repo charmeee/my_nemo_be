@@ -131,14 +131,17 @@ public class AuthController {
         String accessToken = jwtTokenService.generateAccessToken(userId);
         String refreshToken = jwtTokenService.generateRefreshToken(userId);
         refreshTokenService.save(userId, refreshToken);
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+        ResponseCookie.ResponseCookieBuilder cookieBuilder = ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true)
                 .secure(appProperties.getCookie().isSecure())
                 .path("/")
                 .maxAge(jwtProperties.getRefreshExpSec())
-                .sameSite(appProperties.getCookie().getSameSite())
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+                .sameSite(appProperties.getCookie().getSameSite());
+        String cookieDomain = appProperties.getCookie().getDomain();
+        if (cookieDomain != null && !cookieDomain.isBlank()) {
+            cookieBuilder.domain(cookieDomain);
+        }
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieBuilder.build().toString());
         return ApiResponse.ok(new RefreshResponse(accessToken, jwtProperties.getAccessExpSec()));
     }
 

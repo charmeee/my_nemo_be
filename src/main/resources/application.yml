@@ -53,21 +53,19 @@ spring:
 
 app:
   cookie:
-    secure: false
-    same-site: Strict
-    domain: localhost
+    secure: ${COOKIE_SECURE:false}
+    same-site: ${COOKIE_SAME_SITE:Strict}
+    domain: ${COOKIE_DOMAIN:}
   oauth:
     frontend-redirect-uri: ${APP_FRONTEND_URL:http://localhost:5173}/auth/callback
   file:
     upload-dir: ${FILE_UPLOAD_DIR:./data/uploads}
-    base-url: http://localhost:8080/files
+    base-url: ${FILE_BASE_URL:http://localhost:8080/files}
+  redis:
+    key-prefix: ${REDIS_PREFIX:}
 
 cors:
-  allowed-origins:
-    - http://localhost:5173
-    - http://localhost:5174
-    - http://localhost:5175
-    - http://localhost:3000
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000}
 
 jwt:
   secret: ${JWT_SECRET}

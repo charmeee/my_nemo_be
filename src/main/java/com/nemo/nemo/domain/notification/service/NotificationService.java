@@ -4,6 +4,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.nemo.nemo.common.exception.ErrorCode;
 import com.nemo.nemo.common.exception.NemoException;
+import com.nemo.nemo.config.AppProperties;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
 import com.nemo.nemo.domain.notification.dto.NotificationResponse;
@@ -42,6 +43,7 @@ public class NotificationService {
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final RedisMessageListenerContainer redisListenerContainer;
+    private final AppProperties appProperties;
 
     private final ConcurrentHashMap<String, SseEmitter> emitters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, MessageListener> redisListeners = new ConcurrentHashMap<>();
@@ -60,7 +62,7 @@ public class NotificationService {
                 cleanupEmitter(userId);
             }
         };
-        ChannelTopic topic = new ChannelTopic("notification:" + userId);
+        ChannelTopic topic = new ChannelTopic(appProperties.getRedis().getKeyPrefix() + "notification:" + userId);
         redisListenerContainer.addMessageListener(listener, topic);
         redisListeners.put(userId, listener);
 
@@ -122,7 +124,7 @@ public class NotificationService {
         } catch (JacksonException e) {
             responseJson = payloadJson;
         }
-        String channel = "notification:" + userId;
+        String channel = appProperties.getRedis().getKeyPrefix() + "notification:" + userId;
         try {
             stringRedisTemplate.convertAndSend(channel, responseJson);
         } catch (Exception e) {

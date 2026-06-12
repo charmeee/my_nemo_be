@@ -14,13 +14,14 @@ public class AppProperties {
     private Cookie cookie = new Cookie();
     private OAuth oauth = new OAuth();
     private File file = new File();
+    private Redis redis = new Redis();
 
     @Getter
     @Setter
     public static class Cookie {
         private boolean secure = false;
         private String sameSite = "Strict";
-        private String domain = "localhost";
+        private String domain = "";
     }
 
     @Getter
@@ -34,5 +35,11 @@ public class AppProperties {
     public static class File {
         private String uploadDir = "./data/uploads";
         private String baseUrl = "http://localhost:8080/files";
+    }
+
+    @Getter
+    @Setter
+    public static class Redis {
+        private String keyPrefix = "";
     }
 }
