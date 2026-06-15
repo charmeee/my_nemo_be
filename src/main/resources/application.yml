@@ -1,6 +1,10 @@
 spring:
   application:
     name: nemo
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nemo}
     username: ${DB_USERNAME:nemo}
