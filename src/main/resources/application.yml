@@ -1,3 +1,8 @@
+server:
+  # 리버스 프록시(nginx 등) 뒤에서 X-Forwarded-Proto/Host 헤더를 읽어
+  # OAuth2 redirect_uri 의 {baseUrl} 치환이 외부 https 도메인으로 되게 한다.
+  forward-headers-strategy: framework
+
 spring:
   application:
     name: nemo
