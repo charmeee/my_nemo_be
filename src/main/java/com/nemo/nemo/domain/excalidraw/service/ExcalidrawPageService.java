@@ -13,6 +13,8 @@ import com.nemo.nemo.domain.excalidraw.dto.PageUpdateRequest;
 import com.nemo.nemo.domain.excalidraw.entity.ExcalidrawPage;
 import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
 import com.nemo.nemo.domain.album.entity.MemberStatus;
+import com.nemo.nemo.domain.image.entity.Image;
+import com.nemo.nemo.domain.image.repository.ImageRepository;
 import com.nemo.nemo.domain.notification.entity.NotificationType;
 import com.nemo.nemo.domain.notification.service.NotificationService;
 import com.nemo.nemo.domain.sync.service.RoomManager;
@@ -26,8 +28,11 @@ import org.springframework.web.socket.WebSocketSession;
 
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -40,6 +45,7 @@ public class ExcalidrawPageService {
     private final ExcalidrawPageRepository pageRepository;
     private final AlbumRepository albumRepository;
     private final AlbumMemberRepository albumMemberRepository;
+    private final ImageRepository imageRepository;
     private final RoomManager roomManager;
     private final ObjectMapper objectMapper;
     private final PageDocumentStore pageDocumentStore;
@@ -113,16 +119,46 @@ public class ExcalidrawPageService {
         broadcastPageEvent(albumId.toString(), "deleted", pageId.toString(), page.getName(), page.getPageOrder());
     }
 
-    /** 특정 페이지의 현재 elements 반환 (메모리→Redis→DB 순서) */
-    public List<Object> getPageElements(UUID albumId, UUID pageId, UUID userId) {
+    /** 특정 페이지의 현재 elements + 이미지 fileId→url 매핑 반환 (메모리→Redis→DB 순서) */
+    public Map<String, Object> getPageElements(UUID albumId, UUID pageId, UUID userId) {
         getMemberOrThrow(albumId, userId);
         String json = pageDocumentStore.loadElements(pageId.toString());
-        if (json == null || json.isBlank() || json.equals("[]")) return List.of();
-        try {
-            return objectMapper.readValue(json, List.class);
-        } catch (Exception e) {
-            return List.of();
+        List<?> elements;
+        if (json == null || json.isBlank() || json.equals("[]")) {
+            elements = List.of();
+        } else {
+            try {
+                elements = objectMapper.readValue(json, List.class);
+            } catch (Exception e) {
+                elements = List.of();
+            }
         }
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("elements", elements);
+        resp.put("files", loadFileMappings(albumId, collectFileIds(elements)));
+        return resp;
+    }
+
+    private Set<String> collectFileIds(List<?> elements) {
+        Set<String> ids = new HashSet<>();
+        for (Object e : elements) {
+            if (e instanceof Map<?, ?> m && "image".equals(m.get("type"))) {
+                Object fid = m.get("fileId");
+                if (fid instanceof String s && !s.isEmpty()) ids.add(s);
+            }
+        }
+        return ids;
+    }
+
+    private Map<String, String> loadFileMappings(UUID albumId, Set<String> fileIds) {
+        if (fileIds.isEmpty()) return Map.of();
+        Map<String, String> map = new LinkedHashMap<>();
+        for (Image img : imageRepository.findByAlbumIdAndExcalidrawFileIdIn(albumId, fileIds)) {
+            if (img.getExcalidrawFileId() != null) {
+                map.put(img.getExcalidrawFileId(), img.getUrl());
+            }
+        }
+        return map;
     }
 
     /** 게스트 접근용: 멤버십 검증 없이 페이지 목록 반환 */

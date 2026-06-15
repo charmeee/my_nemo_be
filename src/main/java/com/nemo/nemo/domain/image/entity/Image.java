@@ -36,6 +36,9 @@ public class Image {
 
     private String mimeType;
 
+    @Column(name = "excalidraw_file_id", length = 64)
+    private String excalidrawFileId;
+
     private LocalDateTime createdAt;
 
     @PrePersist
@@ -43,7 +46,7 @@ public class Image {
         this.createdAt = LocalDateTime.now();
     }
 
-    public static Image create(Album album, Member uploader, String filePath, String url, long size, String mimeType) {
+    public static Image create(Album album, Member uploader, String filePath, String url, long size, String mimeType, String excalidrawFileId) {
         Image image = new Image();
         image.album = album;
         image.uploader = uploader;
@@ -51,6 +54,7 @@ public class Image {
         image.url = url;
         image.size = size;
         image.mimeType = mimeType;
+        image.excalidrawFileId = excalidrawFileId;
         return image;
     }
 }

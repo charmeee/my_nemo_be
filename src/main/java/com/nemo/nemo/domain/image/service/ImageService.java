@@ -45,7 +45,7 @@ public class ImageService {
     private final AppProperties appProperties;
 
     @Transactional
-    public ImageResponse uploadImage(UUID albumId, UUID userId, MultipartFile file) {
+    public ImageResponse uploadImage(UUID albumId, UUID userId, MultipartFile file, String excalidrawFileId) {
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new NemoException(ErrorCode.IMAGE_SIZE_EXCEEDED);
         }
@@ -88,7 +88,7 @@ public class ImageService {
 
         String url = appProperties.getFile().getBaseUrl() + "/" + relativePath;
 
-        Image image = Image.create(album, uploader, relativePath, url, file.getSize(), mimeType);
+        Image image = Image.create(album, uploader, relativePath, url, file.getSize(), mimeType, excalidrawFileId);
         imageRepository.save(image);
 
         return toResponse(image);

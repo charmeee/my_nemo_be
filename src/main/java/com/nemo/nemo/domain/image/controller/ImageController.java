@@ -23,9 +23,10 @@ public class ImageController {
     public ResponseEntity<ApiResponse<ImageResponse>> uploadImage(
             @PathVariable UUID albumId,
             @AuthenticationPrincipal String userId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "excalidrawFileId", required = false) String excalidrawFileId) {
         return ResponseEntity.ok(ApiResponse.ok(
-                imageService.uploadImage(albumId, UUID.fromString(userId), file)));
+                imageService.uploadImage(albumId, UUID.fromString(userId), file, excalidrawFileId)));
     }
 
     @GetMapping

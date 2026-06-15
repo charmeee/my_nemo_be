@@ -53,8 +53,8 @@ public class ExcalidrawPageController {
             @PathVariable UUID albumId,
             @PathVariable UUID pageId,
             @AuthenticationPrincipal String userId) {
-        List<Object> elements = pageService.getPageElements(albumId, pageId, UUID.fromString(userId));
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("elements", elements)));
+        return ResponseEntity.ok(ApiResponse.ok(
+                pageService.getPageElements(albumId, pageId, UUID.fromString(userId))));
     }
 
     @DeleteMapping("/{pageId}")

@@ -13,6 +13,8 @@ import com.nemo.nemo.domain.excalidraw.entity.ExcalidrawPage;
 import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
 import com.nemo.nemo.domain.excalidraw.service.ElementDiffApplier;
 import com.nemo.nemo.domain.excalidraw.service.PageDocumentStore;
+import com.nemo.nemo.domain.image.entity.Image;
+import com.nemo.nemo.domain.image.repository.ImageRepository;
 import com.nemo.nemo.domain.sync.service.ClockManager;
 import com.nemo.nemo.domain.sync.service.PresenceManager;
 import com.nemo.nemo.domain.sync.service.RoomManager;
@@ -52,6 +54,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     private final PresenceManager presenceManager;
     private final ElementDiffApplier elementDiffApplier;
     private final ExcalidrawPageRepository pageRepository;
+    private final ImageRepository imageRepository;
     private final AlbumMemberRepository albumMemberRepository;
     private final AlbumRepository albumRepository;
     private final MemberRoleCacheService roleCacheService;
@@ -202,6 +205,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
                 ))
                 .toList();
 
+        Set<String> hydratedFileIds = new HashSet<>();
         if (isDelta) {
             Map<String, Object> deltaByPage = new LinkedHashMap<>();
             for (ExcalidrawPage page : pages) {
@@ -210,19 +214,22 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
                 long serverClock = clockManager.get(pageId);
                 if (serverClock > clientClock) {
                     String elements = pageDocumentStore.loadElements(pageId);
+                    Object elementsList = parseElements(elements);
+                    collectExcalidrawFileIds(elementsList, hydratedFileIds);
                     deltaByPage.put(pageId, Map.of(
-                            "elements", parseElements(elements),
+                            "elements", elementsList,
                             "serverClock", serverClock
                     ));
                 }
             }
-            sendJson(session, Map.of(
-                    "type", "connected",
-                    "hydrationType", "delta",
-                    "isReadonly", isReadonly,
-                    "deltaByPage", deltaByPage,
-                    "roomMembers", roomMembers
-            ));
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("type", "connected");
+            resp.put("hydrationType", "delta");
+            resp.put("isReadonly", isReadonly);
+            resp.put("deltaByPage", deltaByPage);
+            resp.put("roomMembers", roomMembers);
+            resp.put("files", loadFileMappings(UUID.fromString(albumId), hydratedFileIds));
+            sendJson(session, resp);
         } else {
             String currentPageIdStr = root.path("currentPageId").asText(null);
             // currentPageId가 null/빈값/"null"이면 첫 번째 페이지로 fallback
@@ -236,11 +243,13 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
                 long serverClock = clockManager.get(pageId);
                 if (pageId.equals(currentPageIdStr)) {
                     String elements = pageDocumentStore.loadElements(pageId);
+                    Object elementsList = parseElements(elements);
+                    collectExcalidrawFileIds(elementsList, hydratedFileIds);
                     pageList.add(Map.of(
                             "pageId", pageId,
                             "name", page.getName(),
                             "pageOrder", page.getPageOrder(),
-                            "elements", parseElements(elements),
+                            "elements", elementsList,
                             "serverClock", serverClock
                     ));
                 } else {
@@ -253,13 +262,14 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
                     ));
                 }
             }
-            sendJson(session, Map.of(
-                    "type", "connected",
-                    "hydrationType", "full",
-                    "isReadonly", isReadonly,
-                    "pages", pageList,
-                    "roomMembers", roomMembers
-            ));
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("type", "connected");
+            resp.put("hydrationType", "full");
+            resp.put("isReadonly", isReadonly);
+            resp.put("pages", pageList);
+            resp.put("roomMembers", roomMembers);
+            resp.put("files", loadFileMappings(UUID.fromString(albumId), hydratedFileIds));
+            sendJson(session, resp);
         }
 
         // user_joined 브로드캐스트 (자신 제외 — broadcast 내부에서 sender 제외)
@@ -484,6 +494,29 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    /** elements에서 type=image 인 항목의 fileId를 모은다. */
+    private void collectExcalidrawFileIds(Object elements, Set<String> out) {
+        if (!(elements instanceof List<?> list)) return;
+        for (Object e : list) {
+            if (e instanceof Map<?, ?> m && "image".equals(m.get("type"))) {
+                Object fid = m.get("fileId");
+                if (fid instanceof String s && !s.isEmpty()) out.add(s);
+            }
+        }
+    }
+
+    /** (album, fileId) → url 매핑을 한 번에 조회한다. */
+    private Map<String, String> loadFileMappings(UUID albumId, Collection<String> fileIds) {
+        if (fileIds.isEmpty()) return Map.of();
+        Map<String, String> map = new LinkedHashMap<>();
+        for (Image img : imageRepository.findByAlbumIdAndExcalidrawFileIdIn(albumId, fileIds)) {
+            if (img.getExcalidrawFileId() != null) {
+                map.put(img.getExcalidrawFileId(), img.getUrl());
+            }
+        }
+        return map;
     }
 
     private Object parseNode(JsonNode node) {
