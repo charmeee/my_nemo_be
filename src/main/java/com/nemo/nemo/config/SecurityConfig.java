@@ -38,7 +38,7 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/oauth2/**", "/auth/**").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/api-docs", "/api-docs/**", "/v3/api-docs/**").permitAll()
                         // /files/** : JWT 인증 필요 (B-SEC-05 — URL만 알면 누구나 접근 차단)
                         .requestMatchers("/sync/**").permitAll()  // WebSocket: JwtHandshakeInterceptor가 자체 인증
                         .requestMatchers(HttpMethod.GET, "/invite/*/info").permitAll()
