@@ -32,7 +32,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class NotificationService {
 
@@ -49,6 +48,8 @@ public class NotificationService {
     private final ConcurrentHashMap<String, MessageListener> redisListeners = new ConcurrentHashMap<>();
 
     // SSE Emitter 생성 + 사용자별 Redis Pub/Sub 채널 구독 등록
+    // @Transactional 을 붙이면 SSE 응답이 30분 살아있는 동안 OSIV(open-in-view=true)
+    // 가 connection 을 풀에 반환하지 않아 Hikari pool 이 고갈된다. 트랜잭션 없이 처리.
     public SseEmitter subscribe(String userId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
@@ -144,6 +145,7 @@ public class NotificationService {
     }
 
     // 최근 90일 사용자 알림 목록 반환
+    @Transactional(readOnly = true)
     public List<NotificationResponse> getNotifications(String userId) {
         return notificationRepository.findRecentByUserId(
                         UUID.fromString(userId),
@@ -153,6 +155,7 @@ public class NotificationService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public long getUnreadCount(String userId) {
         return notificationRepository.countByUserIdAndIsReadFalse(UUID.fromString(userId));
     }

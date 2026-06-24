@@ -15,6 +15,9 @@ spring:
     username: ${DB_USERNAME:nemo}
     password: ${DB_PASSWORD:nemo}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      leak-detection-threshold: 5000
   jpa:
     hibernate:
       ddl-auto: validate
