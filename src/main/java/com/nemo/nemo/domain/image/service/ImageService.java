@@ -43,6 +43,7 @@ public class ImageService {
     private final AlbumRepository albumRepository;
     private final MemberRepository memberRepository;
     private final AppProperties appProperties;
+    private final ImageOptimizer imageOptimizer;
 
     // MIME/크기/권한/Lock 검증 후 파일 시스템 저장 + DB 메타 등록
     @Transactional
@@ -74,22 +75,28 @@ public class ImageService {
         Member uploader = memberRepository.findById(userId)
                 .orElseThrow(() -> new NemoException(ErrorCode.MEMBER_NOT_FOUND));
 
-        String extension = extractExtension(file.getOriginalFilename(), mimeType);
-        String filename = UUID.randomUUID() + "." + extension;
+        ImageOptimizer.Result optimized;
+        try {
+            optimized = imageOptimizer.optimize(file.getInputStream(), mimeType);
+        } catch (IOException e) {
+            throw new NemoException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+
+        String filename = UUID.randomUUID() + "." + optimized.extension();
         String relativePath = "albums/" + albumId + "/" + filename;
 
         Path targetPath = Paths.get(appProperties.getFile().getUploadDir()).resolve(relativePath);
 
         try {
             Files.createDirectories(targetPath.getParent());
-            Files.copy(file.getInputStream(), targetPath);
+            Files.write(targetPath, optimized.bytes());
         } catch (IOException e) {
             throw new NemoException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         String url = appProperties.getFile().getBaseUrl() + "/" + relativePath;
 
-        Image image = Image.create(album, uploader, relativePath, url, file.getSize(), mimeType, excalidrawFileId);
+        Image image = Image.create(album, uploader, relativePath, url, optimized.bytes().length, optimized.mimeType(), excalidrawFileId);
         imageRepository.save(image);
 
         return toResponse(image);
@@ -143,16 +150,4 @@ public class ImageService {
         );
     }
 
-    private String extractExtension(String originalFilename, String mimeType) {
-        if (originalFilename != null && originalFilename.contains(".")) {
-            return originalFilename.substring(originalFilename.lastIndexOf('.') + 1).toLowerCase();
-        }
-        return switch (mimeType) {
-            case "image/jpeg" -> "jpg";
-            case "image/png" -> "png";
-            case "image/webp" -> "webp";
-            case "image/heic" -> "heic";
-            default -> "bin";
-        };
-    }
 }

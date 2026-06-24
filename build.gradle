@@ -56,6 +56,9 @@ dependencies {
     // Swagger (OpenAPI 3) — springdoc 3.x required for Spring Boot 4.x
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
+    // 이미지 리사이즈/재인코딩 (Thumbnailator: 순수 Java, 네이티브 의존 없음)
+    implementation 'net.coobird:thumbnailator:0.4.20'
+
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
