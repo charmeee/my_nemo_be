@@ -22,7 +22,14 @@ public class ImageOptimizer {
         }
 
         byte[] originalBytes = input.readAllBytes();
-        BufferedImage source = ImageIO.read(new ByteArrayInputStream(originalBytes));
+        BufferedImage source;
+        try {
+            source = ImageIO.read(new ByteArrayInputStream(originalBytes));
+        } catch (IOException e) {
+            // ImageIO 는 image data 가 없는 JPEG 등 corrupt 입력에서 null 대신 IIOException 을
+            // 던질 수 있다. 최적화 못 하는 입력은 원본 그대로 통과.
+            return Result.passthrough(originalBytes, mimeType);
+        }
         if (source == null) {
             return Result.passthrough(originalBytes, mimeType);
         }

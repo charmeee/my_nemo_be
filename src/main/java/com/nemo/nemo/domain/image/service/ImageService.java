@@ -15,6 +15,7 @@ import com.nemo.nemo.domain.image.repository.ImageRepository;
 import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -79,6 +81,7 @@ public class ImageService {
         try {
             optimized = imageOptimizer.optimize(file.getInputStream(), mimeType);
         } catch (IOException e) {
+            log.error("이미지 최적화 실패: filename={}, mime={}", file.getOriginalFilename(), mimeType, e);
             throw new NemoException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
@@ -91,6 +94,7 @@ public class ImageService {
             Files.createDirectories(targetPath.getParent());
             Files.write(targetPath, optimized.bytes());
         } catch (IOException e) {
+            log.error("이미지 저장 실패: path={}", targetPath, e);
             throw new NemoException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
