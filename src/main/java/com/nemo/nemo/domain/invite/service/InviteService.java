@@ -50,6 +50,7 @@ public class InviteService {
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
 
+    // ADMIN 권한 검증 후 16자 코드의 초대 링크 생성
     @Transactional
     public InviteLinkResponse createInviteLink(UUID albumId, UUID userId, InviteCreateRequest req) {
         albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, userId)
@@ -68,6 +69,7 @@ public class InviteService {
         return toResponse(link);
     }
 
+    // 초대 코드 정보 조회: Redis 캐시 우선, miss 시 DB 조회 후 캐싱
     public InviteInfoResponse getInviteInfo(String code) {
         // N-CORE-06: Redis 캐시 우선 조회
         String cacheKey = CACHE_PREFIX + code;
@@ -118,6 +120,7 @@ public class InviteService {
                 .toList();
     }
 
+    // 초대 코드로 앨범 가입 처리 + 가입/승인요청 알림 발송
     @Transactional
     public MemberStatus joinViaInvite(String code, UUID userId) {
         InviteLink link = inviteLinkRepository.findByCode(code)
@@ -164,6 +167,7 @@ public class InviteService {
         return link.getAlbum().getId();
     }
 
+    // 기존 활성 링크 모두 비활성화 후 새 코드 발급 + 캐시 무효화
     @Transactional
     public InviteLinkResponse reissueInviteLink(UUID albumId, UUID userId) {
         albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, userId)
@@ -189,6 +193,7 @@ public class InviteService {
         return toResponse(link);
     }
 
+    // 초대 링크 활성/비활성 토글 + 캐시 무효화
     @Transactional
     public void toggleInviteLink(UUID linkId, UUID userId, boolean active) {
         InviteLink link = inviteLinkRepository.findById(linkId)

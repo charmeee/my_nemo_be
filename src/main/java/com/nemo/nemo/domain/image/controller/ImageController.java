@@ -19,6 +19,7 @@ public class ImageController {
 
     private final ImageService imageService;
 
+    // 앨범에 이미지 업로드 (MIME/크기 검증)
     @PostMapping
     public ResponseEntity<ApiResponse<ImageResponse>> uploadImage(
             @PathVariable UUID albumId,
@@ -29,6 +30,7 @@ public class ImageController {
                 imageService.uploadImage(albumId, UUID.fromString(userId), file, excalidrawFileId)));
     }
 
+    // 앨범의 이미지 목록 조회
     @GetMapping
     public ResponseEntity<ApiResponse<List<ImageResponse>>> getImages(
             @PathVariable UUID albumId,
@@ -37,6 +39,7 @@ public class ImageController {
                 imageService.getImages(albumId, UUID.fromString(userId))));
     }
 
+    // 이미지 삭제 (DB + 파일 시스템)
     @DeleteMapping("/{imageId}")
     public ResponseEntity<ApiResponse<Void>> deleteImage(
             @PathVariable UUID albumId,

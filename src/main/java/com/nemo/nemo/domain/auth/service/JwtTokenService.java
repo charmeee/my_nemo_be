@@ -21,6 +21,7 @@ public class JwtTokenService {
         this.jwtProperties = jwtProperties;
     }
 
+    // accessToken 발급 — jti 포함(로그아웃 시 블랙리스트용)
     public String generateAccessToken(String userId) {
         long expMs = jwtProperties.getAccessExpSec() * 1000;
         return Jwts.builder()
@@ -48,6 +49,7 @@ public class JwtTokenService {
                 .compact();
     }
 
+    // refreshToken 발급 (장기 만료)
     public String generateRefreshToken(String userId) {
         long expMs = jwtProperties.getRefreshExpSec() * 1000;
         return Jwts.builder()
@@ -58,6 +60,7 @@ public class JwtTokenService {
                 .compact();
     }
 
+    // 토큰 subject(userId) 추출 — 실패 시 null
     public String extractSubject(String token) {
         try {
             return parseClaims(token).getSubject();
@@ -66,6 +69,7 @@ public class JwtTokenService {
         }
     }
 
+    // 토큰 jti 추출 — 실패 시 null
     public String extractJti(String token) {
         try {
             return parseClaims(token).getId();
@@ -74,6 +78,7 @@ public class JwtTokenService {
         }
     }
 
+    // 토큰 남은 유효 시간(초) — 블랙리스트 TTL 산정용
     public long getRemainingSeconds(String token) {
         try {
             Date expiration = parseClaims(token).getExpiration();

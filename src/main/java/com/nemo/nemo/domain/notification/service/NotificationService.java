@@ -48,6 +48,7 @@ public class NotificationService {
     private final ConcurrentHashMap<String, SseEmitter> emitters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, MessageListener> redisListeners = new ConcurrentHashMap<>();
 
+    // SSE Emitter 생성 + 사용자별 Redis Pub/Sub 채널 구독 등록
     public SseEmitter subscribe(String userId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
 
@@ -92,6 +93,7 @@ public class NotificationService {
         }
     }
 
+    // 알림 저장 + Redis Pub/Sub publish (중복 억제 5분, 실패 시 직접 SSE fallback)
     @Transactional
     public void send(String userId, NotificationType type, Object payload) {
         String payloadJson;
@@ -141,6 +143,7 @@ public class NotificationService {
         }
     }
 
+    // 최근 90일 사용자 알림 목록 반환
     public List<NotificationResponse> getNotifications(String userId) {
         return notificationRepository.findRecentByUserId(
                         UUID.fromString(userId),
@@ -154,6 +157,7 @@ public class NotificationService {
         return notificationRepository.countByUserIdAndIsReadFalse(UUID.fromString(userId));
     }
 
+    // 본인 알림인지 검증 후 읽음 처리
     @Transactional
     public void markRead(UUID notificationId, String userId) {
         Notification notification = notificationRepository.findById(notificationId)
@@ -166,6 +170,7 @@ public class NotificationService {
         notification.markRead();
     }
 
+    // 사용자의 모든 미읽음 알림 일괄 읽음 처리
     @Transactional
     public void markAllRead(String userId) {
         notificationRepository.markAllRead(UUID.fromString(userId));

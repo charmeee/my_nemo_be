@@ -21,6 +21,7 @@ public class RefreshTokenService {
         this.jwtProperties = jwtProperties;
     }
 
+    // refreshToken을 Redis에 TTL과 함께 저장
     public void save(String userId, String refreshToken) {
         redisTemplate.opsForValue().set(
                 REFRESH_KEY_PREFIX + userId,
@@ -37,6 +38,7 @@ public class RefreshTokenService {
         redisTemplate.delete(REFRESH_KEY_PREFIX + userId);
     }
 
+    // 로그아웃 시 accessToken의 jti를 남은 유효시간만큼 블랙리스트에 등록
     public void blacklistAccessToken(String jti, long remainingSeconds) {
         if (remainingSeconds > 0) {
             redisTemplate.opsForValue().set(
@@ -47,6 +49,7 @@ public class RefreshTokenService {
         }
     }
 
+    // jti가 블랙리스트에 등록되었는지 확인
     public boolean isBlacklisted(String jti) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_KEY_PREFIX + jti));
     }

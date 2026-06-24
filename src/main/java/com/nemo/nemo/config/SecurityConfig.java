@@ -29,6 +29,7 @@ public class SecurityConfig {
     private final OAuth2LoginSuccessHandler oauth2SuccessHandler;
     private final CorsProperties corsProperties;
 
+    // Spring Security 필터 체인 구성 — JWT 기반 stateless 인증, CORS/CSRF 정책 적용
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -57,6 +58,7 @@ public class SecurityConfig {
         return http.build();
     }
 
+    // CORS 정책 빈 — allowed origins는 CorsProperties(application.yml)에서 주입
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();

@@ -44,6 +44,7 @@ public class ImageService {
     private final MemberRepository memberRepository;
     private final AppProperties appProperties;
 
+    // MIME/크기/권한/Lock 검증 후 파일 시스템 저장 + DB 메타 등록
     @Transactional
     public ImageResponse uploadImage(UUID albumId, UUID userId, MultipartFile file, String excalidrawFileId) {
         if (file.getSize() > MAX_FILE_SIZE) {
@@ -94,6 +95,7 @@ public class ImageService {
         return toResponse(image);
     }
 
+    // 멤버 권한 확인 후 앨범 이미지 목록 최신순 반환
     public List<ImageResponse> getImages(UUID albumId, UUID userId) {
         albumMemberRepository.findActiveByAlbumIdAndUserId(albumId, userId)
                 .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_ACCESS_DENIED));
@@ -103,6 +105,7 @@ public class ImageService {
                 .toList();
     }
 
+    // 업로더 또는 ADMIN만 이미지 삭제 가능 (파일 + DB 동시 제거)
     @Transactional
     public void deleteImage(UUID albumId, UUID imageId, UUID userId) {
         Image image = imageRepository.findById(imageId)

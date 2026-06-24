@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // 비즈니스 예외 처리 — ErrorCode의 HTTP 상태로 응답
     @ExceptionHandler(NemoException.class)
     public ResponseEntity<ApiResponse<Void>> handleNemoException(NemoException e) {
         log.warn("NemoException: {}", e.getMessage());
@@ -22,6 +23,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(e.getMessage()));
     }
 
+    // @Valid 검증 실패 처리 — 필드 에러 메시지를 합쳐 400 반환
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
@@ -32,6 +34,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(message));
     }
 
+    // 핸들되지 않은 모든 예외 처리 — 500 응답
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
         log.error("Unhandled exception", e);

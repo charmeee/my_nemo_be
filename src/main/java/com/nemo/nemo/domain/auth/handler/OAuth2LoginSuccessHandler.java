@@ -41,6 +41,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         this.jwtProperties = jwtProperties;
     }
 
+    // OAuth2 로그인 성공 시: 회원 조회/생성 → JWT 발급 → refreshToken 쿠키 + 프론트로 리다이렉트
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,

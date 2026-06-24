@@ -11,10 +11,12 @@ public class RoomManager {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();
 
+    // 앨범 룸에 WS 세션 등록
     public void join(String albumId, WebSocketSession session) {
         rooms.computeIfAbsent(albumId, k -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
+    // 앨범 룸에서 WS 세션 제거, 비면 룸 삭제
     public void leave(String albumId, WebSocketSession session) {
         Set<WebSocketSession> sessions = rooms.get(albumId);
         if (sessions != null) {

@@ -54,6 +54,7 @@ public class ExcalidrawPageService {
     @Lazy
     private final TrashService trashService;
 
+    // 앨범 멤버 검증 후 활성 페이지 목록을 pageOrder 순으로 반환
     public List<PageListResponse> getPages(UUID albumId, UUID userId) {
         getMemberOrThrow(albumId, userId);
         return pageRepository.findByAlbumIdOrderByPageOrder(albumId).stream()
@@ -61,6 +62,7 @@ public class ExcalidrawPageService {
                 .toList();
     }
 
+    // 페이지 생성: EDITOR 이상 권한 + 최대 30개 제한, 추가 후 page_event 브로드캐스트 및 알림
     @Transactional
     public PageListResponse createPage(UUID albumId, UUID userId, PageCreateRequest req) {
         requireEditor(albumId, userId);
@@ -92,6 +94,7 @@ public class ExcalidrawPageService {
         return toResponse(page);
     }
 
+    // 페이지 이름/순서 수정: EDITOR 이상, reordered 이벤트 브로드캐스트
     @Transactional
     public PageListResponse updatePage(UUID albumId, UUID pageId, UUID userId, PageUpdateRequest req) {
         requireEditor(albumId, userId);
@@ -107,6 +110,7 @@ public class ExcalidrawPageService {
         return toResponse(page);
     }
 
+    // 페이지 soft delete + 휴지통 이동, deleted 이벤트 브로드캐스트
     @Transactional
     public void deletePage(UUID albumId, UUID pageId, UUID userId) {
         requireEditor(albumId, userId);

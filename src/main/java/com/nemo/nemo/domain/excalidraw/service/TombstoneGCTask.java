@@ -27,6 +27,7 @@ public class TombstoneGCTask {
     private final RoomManager roomManager;
     private final ObjectMapper objectMapper;
 
+    // 매일 04:05 실행: 활성 세션이 없는 페이지에서 isDeleted=true 원소를 영구 제거 후 캐시 무효화
     @Scheduled(cron = "0 5 4 * * *")
     @Transactional
     public void runGC() {

@@ -18,12 +18,14 @@ public class TrashController {
 
     private final TrashService trashService;
 
+    // 사용자 휴지통 항목 목록 조회
     @GetMapping
     public ResponseEntity<ApiResponse<List<TrashResponse>>> getTrash(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.ok(trashService.getTrash(UUID.fromString(userId))));
     }
 
+    // 휴지통 항목 복원
     @PostMapping("/{id}/restore")
     public ResponseEntity<ApiResponse<Void>> restore(
             @PathVariable UUID id,
@@ -32,6 +34,7 @@ public class TrashController {
         return ResponseEntity.ok(ApiResponse.ok());
     }
 
+    // 휴지통 항목 영구 삭제
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> permanentDelete(
             @PathVariable UUID id,

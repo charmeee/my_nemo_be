@@ -19,6 +19,7 @@ import java.util.Map;
 @Component
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
+    // handshake 단계에서 URI의 albumId만 추출해 attributes에 저장 (JWT는 connect 메시지에서 검증)
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {

@@ -37,18 +37,21 @@ public class AlbumMemberService {
     private final com.nemo.nemo.domain.trash.service.TrashService trashService;
     private final MemberRoleCacheService roleCacheService;
 
+    // ACTIVE 멤버 목록 조회 (요청자 멤버십 검증)
     public List<MemberResponse> getMembers(UUID albumId, UUID requesterId) {
         getMemberOrThrow(albumId, requesterId);
         return albumMemberRepository.findByAlbumIdAndStatusOrderByJoinedAt(albumId, MemberStatus.ACTIVE)
                 .stream().map(this::toResponse).toList();
     }
 
+    // 가입 대기(PENDING) 멤버 목록 조회 (ADMIN 전용)
     public List<MemberResponse> getPendingMembers(UUID albumId, UUID requesterId) {
         requireAdmin(albumId, requesterId);
         return albumMemberRepository.findByAlbumIdAndStatus(albumId, MemberStatus.PENDING)
                 .stream().map(this::toResponse).toList();
     }
 
+    // 가입 승인 후 역할 캐시 무효화 + 알림 전송
     @Transactional
     public void approveMember(UUID albumId, UUID targetUserId, UUID requesterId) {
         requireAdmin(albumId, requesterId);
@@ -59,6 +62,7 @@ public class AlbumMemberService {
                 Map.of("albumId", albumId.toString()));
     }
 
+    // 가입 거절 후 캐시 무효화 + 알림 전송
     @Transactional
     public void rejectMember(UUID albumId, UUID targetUserId, UUID requesterId) {
         requireAdmin(albumId, requesterId);
@@ -69,6 +73,7 @@ public class AlbumMemberService {
                 Map.of("albumId", albumId.toString()));
     }
 
+    // 멤버 역할 변경: ADMIN 승격 불가, VIEWER 강등 시 활성 세션 강제 종료
     @Transactional
     public void changeRole(UUID albumId, UUID targetUserId, AlbumRole newRole, UUID requesterId) {
         requireAdmin(albumId, requesterId);
@@ -93,6 +98,7 @@ public class AlbumMemberService {
         }
     }
 
+    // 멤버 강제 추방: 세션 종료 후 삭제, 마지막 멤버면 앨범도 휴지통 이동
     @Transactional
     public void kickMember(UUID albumId, UUID targetUserId, UUID requesterId) {
         requireAdmin(albumId, requesterId);
@@ -114,6 +120,7 @@ public class AlbumMemberService {
         }
     }
 
+    // 본인 탈퇴: ADMIN은 위임 후에만 가능, 마지막 멤버면 앨범 휴지통 이동
     @Transactional
     public void leaveAlbum(UUID albumId, UUID userId) {
         AlbumMember member = getMemberOrThrow(albumId, userId);
@@ -143,6 +150,7 @@ public class AlbumMemberService {
         }
     }
 
+    // 이메일로 직접 초대: PENDING 상태로 추가 후 알림 전송
     @Transactional
     public void inviteByEmail(UUID albumId, String email, AlbumRole role, UUID requesterId) {
         requireAdmin(albumId, requesterId);
@@ -167,6 +175,7 @@ public class AlbumMemberService {
                 Map.of("albumId", albumId.toString(), "albumName", album.getName()));
     }
 
+    // ADMIN 권한 위임: 대상은 ADMIN, 기존 ADMIN은 EDITOR로 강등
     @Transactional
     public void transferAdmin(UUID albumId, UUID targetUserId, UUID requesterId) {
         requireAdmin(albumId, requesterId);

@@ -52,6 +52,7 @@ public class TrashService {
     private final RoomManager roomManager;
     private final ObjectMapper objectMapper;
 
+    // 앨범을 30일 만료의 휴지통 항목으로 추가
     @Transactional
     public void addAlbumToTrash(UUID albumId, UUID deletedById) {
         Album album = albumRepository.findById(albumId)
@@ -75,6 +76,7 @@ public class TrashService {
         trashRepository.save(trash);
     }
 
+    // 페이지를 30일 만료의 휴지통 항목으로 추가
     @Transactional
     public void addPageToTrash(UUID tlPageId, UUID albumId, UUID deletedById) {
         Member member = memberRepository.findById(deletedById)
@@ -84,12 +86,14 @@ public class TrashService {
         trashRepository.save(trash);
     }
 
+    // 사용자가 삭제한 휴지통 항목들을 최신순으로 반환
     public List<TrashResponse> getTrash(UUID userId) {
         return trashRepository.findByDeletedByIdOrderByCreatedAtDesc(userId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
+    // 휴지통 항목 복원 (앨범/페이지), 페이지 복원 시 WS 브로드캐스트
     @Transactional
     public void restore(UUID trashId, UUID userId) {
         Trash trash = trashRepository.findById(trashId)
@@ -114,6 +118,7 @@ public class TrashService {
         trashRepository.delete(trash);
     }
 
+    // 휴지통 항목 영구 삭제 (앨범의 경우 이미지 파일·연관 데이터 모두 제거)
     @Transactional
     public void permanentDelete(UUID trashId, UUID userId) {
         Trash trash = trashRepository.findById(trashId)
@@ -145,6 +150,7 @@ public class TrashService {
         trashRepository.delete(trash);
     }
 
+    // 매일 03시 만료된 휴지통 항목 일괄 삭제 스케줄러
     @Scheduled(cron = "0 0 3 * * *")
     @Transactional
     public void cleanExpiredTrash() {

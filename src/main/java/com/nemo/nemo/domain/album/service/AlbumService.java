@@ -42,6 +42,7 @@ public class AlbumService {
     private final NotificationService notificationService;
     private final ApplicationEventPublisher eventPublisher;
 
+    // 내가 만든 앨범과 참여한 앨범을 분리해 반환
     public AlbumListResponse getMyAlbums(UUID userId) {
         List<Album> ownedAlbums = albumRepository.findByCreatorIdAndDeletedAtIsNull(userId);
         List<UUID> ownedIds = ownedAlbums.stream().map(Album::getId).toList();
@@ -61,6 +62,7 @@ public class AlbumService {
         return new AlbumListResponse(owned, joined);
     }
 
+    // 앨범 생성 후 본인을 ADMIN으로 등록하고 초대 링크/기본 페이지 이벤트 발행
     @Transactional
     public AlbumResponse createAlbum(UUID userId, AlbumCreateRequest req) {
         Member member = memberRepository.findById(userId)
@@ -78,12 +80,14 @@ public class AlbumService {
         return toResponse(album, userId);
     }
 
+    // 멤버십 검증 후 앨범 상세 응답 반환
     public AlbumResponse getAlbum(UUID albumId, UUID userId) {
         Album album = getAlbumOrThrow(albumId);
         getMemberOrThrow(albumId, userId);
         return toResponse(album, userId);
     }
 
+    // 앨범 메타/잠금 상태 변경 (ADMIN 전용), 변경 사항을 멤버에게 알림
     @Transactional
     public AlbumResponse updateAlbum(UUID albumId, UUID userId, AlbumUpdateRequest req) {
         Album album = getAlbumOrThrow(albumId);
@@ -124,6 +128,7 @@ public class AlbumService {
         return toResponse(album, userId);
     }
 
+    // 앨범 soft delete 후 휴지통으로 이동
     @Transactional
     public void deleteAlbum(UUID albumId, UUID userId) {
         Album album = getAlbumOrThrow(albumId);

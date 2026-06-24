@@ -50,18 +50,21 @@ public class AuthController {
         this.emailAuthService = emailAuthService;
     }
 
+    // 이메일 회원가입 후 토큰 발급
     @PostMapping("/register")
     public ApiResponse<RefreshResponse> register(@RequestBody EmailRegisterRequest req, HttpServletResponse response) {
         Member member = emailAuthService.register(req.email(), req.password(), req.nickname());
         return issueTokens(member.getId().toString(), response);
     }
 
+    // 이메일/비밀번호 로그인 후 토큰 발급
     @PostMapping("/login")
     public ApiResponse<RefreshResponse> emailLogin(@RequestBody EmailLoginRequest req, HttpServletResponse response) {
         Member member = emailAuthService.login(req.email(), req.password());
         return issueTokens(member.getId().toString(), response);
     }
 
+    // 쿠키의 refreshToken 검증 후 새 accessToken 재발급
     @PostMapping("/refresh")
     public ApiResponse<RefreshResponse> refresh(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = extractCookie(request, "refreshToken");
@@ -85,6 +88,7 @@ public class AuthController {
         return ApiResponse.ok(new RefreshResponse(newAccessToken, jwtProperties.getAccessExpSec()));
     }
 
+    // accessToken 블랙리스트 등록 + refreshToken 삭제/쿠키 만료 처리
     @PostMapping("/logout")
     public ApiResponse<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         String authHeader = request.getHeader("Authorization");
@@ -113,6 +117,7 @@ public class AuthController {
         return ApiResponse.ok();
     }
 
+    // 현재 로그인 사용자 정보 조회
     @GetMapping("/me")
     public ApiResponse<MemberResponse> me(@AuthenticationPrincipal String userId) {
         Member member = memberRepository.findById(UUID.fromString(userId))

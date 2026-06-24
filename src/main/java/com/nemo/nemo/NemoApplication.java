@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class NemoApplication {
 
+    // Spring Boot 애플리케이션 진입점
     public static void main(String[] args) {
         SpringApplication.run(NemoApplication.class, args);
     }

@@ -19,6 +19,7 @@ public class EmailAuthService {
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
+    // 이메일 중복 검사 후 bcrypt 해시 저장하여 회원 생성
     @Transactional
     public Member register(String email, String password, String nickname) {
         if (memberRepository.findByEmail(email).isPresent()) {
@@ -28,6 +29,7 @@ public class EmailAuthService {
         return memberRepository.save(Member.createWithPassword(email, hash, nickname));
     }
 
+    // 이메일 조회 + bcrypt 비교로 로그인 검증
     @Transactional(readOnly = true)
     public Member login(String email, String password) {
         Member member = memberRepository.findByEmail(email)

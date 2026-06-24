@@ -23,6 +23,7 @@ public class RedisConfig {
                 : new PrefixingStringRedisSerializer(prefix);
     }
 
+    // 일반 RedisTemplate — 키 직렬화에 prefix를 자동 적용
     @Bean
     public RedisTemplate<String, String> redisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, String> template = new RedisTemplate<>();
@@ -34,6 +35,7 @@ public class RedisConfig {
         return template;
     }
 
+    // 문자열 전용 RedisTemplate — 키 직렬화에 prefix를 자동 적용
     @Bean
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory factory) {
         StringRedisTemplate template = new StringRedisTemplate(factory);
@@ -42,6 +44,7 @@ public class RedisConfig {
         return template;
     }
 
+    // Redis Pub/Sub 리스너 컨테이너 빈
     @Bean
     public RedisMessageListenerContainer redisMessageListenerContainer(RedisConnectionFactory factory) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();

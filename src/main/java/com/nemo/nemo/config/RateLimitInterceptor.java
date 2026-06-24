@@ -29,6 +29,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 .scheduleAtFixedRate(counters::clear, 1, 1, TimeUnit.MINUTES);
     }
 
+    // 요청 전 userId별 카운터 증가 후 분당 한도 초과 시 429 반환
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String userId = extractUserId(request);

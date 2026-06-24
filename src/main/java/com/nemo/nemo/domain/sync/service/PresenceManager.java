@@ -16,6 +16,7 @@ public class PresenceManager {
 
     private final ObjectMapper objectMapper;
 
+    // presence 메시지를 발신자 제외 룸 멤버들에게 브로드캐스트
     public void broadcast(String albumId, String senderSessionId,
                           Map<String, Object> presence, Set<WebSocketSession> sessions) {
         if (presence == null || sessions.isEmpty()) return;

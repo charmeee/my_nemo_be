@@ -19,6 +19,7 @@ public class OAuthLoginService {
         this.memberOAuthRepository = memberOAuthRepository;
     }
 
+    // provider+providerId로 OAuth 매핑 조회, 없으면 이메일로 회원 찾거나 신규 생성 후 매핑 연결
     @Transactional
     public Member findOrCreateMember(OAuthUserInfo info) {
         return memberOAuthRepository

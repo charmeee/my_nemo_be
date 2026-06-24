@@ -17,6 +17,7 @@ public class SessionGuard {
     private final RoomManager roomManager;
     private final ObjectMapper objectMapper;
 
+    // 특정 사용자의 WS 세션을 강제 종료
     public void forceClose(String albumId, String userId, String reason) {
         Set<WebSocketSession> sessions = roomManager.getSessions(albumId);
         for (WebSocketSession session : sessions) {
@@ -27,6 +28,7 @@ public class SessionGuard {
         }
     }
 
+    // 앨범의 모든 WS 세션을 강제 종료
     public void forceCloseAll(String albumId, String reason) {
         Set<WebSocketSession> sessions = roomManager.getSessions(albumId);
         for (WebSocketSession session : sessions) {

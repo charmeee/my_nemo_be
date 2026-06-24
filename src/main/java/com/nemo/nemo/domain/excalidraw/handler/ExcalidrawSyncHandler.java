@@ -75,6 +75,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     // pageId 단위 락: load→merge→store 원자성 보장
     private final ConcurrentHashMap<String, Object> pageLocks = new ConcurrentHashMap<>();
 
+    // WS 핸드셰이크 직후 호출: keep-alive 시작 후 connect 메시지를 대기한다
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String albumId = (String) session.getAttributes().get("albumId");
@@ -85,6 +86,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         log.info("[Excalidraw] connected: sessionId={}, albumId={}, userId={}", session.getId(), albumId, userId);
     }
 
+    // 클라이언트 메시지 진입점: type별로 핸들러 분기 (connect 전엔 인증 미설정이라 connect만 허용)
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String albumId = (String) session.getAttributes().get("albumId");
@@ -411,6 +413,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         presenceManager.broadcast(albumId, session.getId(), presenceData, sessions);
     }
 
+    // 연결 종료: 타이머/카운터 정리, user_left 브로드캐스트, 마지막 세션이면 DB 즉시 flush
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String albumId = (String) session.getAttributes().get("albumId");
@@ -443,6 +446,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         pushCounters.values().forEach(c -> c.set(0));
     }
 
+    // 30초 주기 pong 전송으로 프록시/LB의 idle timeout으로 인한 연결 끊김 방지
     private void startKeepAlive(WebSocketSession session) {
         ScheduledFuture<?> existing = keepAliveTimers.put(session.getId(),
                 taskScheduler.scheduleAtFixedRate(
@@ -472,6 +476,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         }
     }
 
+    // sender를 제외한 같은 방의 모든 세션에 메시지 전송 (세션별 sendMessage 동기화 필수)
     private void broadcast(String albumId, WebSocketSession sender, Object msg) {
         String payload;
         try {

@@ -26,6 +26,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.refreshTokenService = refreshTokenService;
     }
 
+    // 요청별 JWT 검증 → 블랙리스트 확인 → SecurityContext에 인증 정보 설정
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

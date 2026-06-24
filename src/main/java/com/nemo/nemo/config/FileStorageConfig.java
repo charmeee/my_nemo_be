@@ -18,6 +18,7 @@ public class FileStorageConfig implements WebMvcConfigurer {
 
     private final AppProperties appProperties;
 
+    // 애플리케이션 시작 시 업로드 디렉토리 생성
     @PostConstruct
     public void init() {
         try {
@@ -28,6 +29,7 @@ public class FileStorageConfig implements WebMvcConfigurer {
         }
     }
 
+    // /files/** 요청을 업로드 디렉토리에 매핑 (인증은 SecurityConfig에서 처리)
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         String uploadDir = Paths.get(appProperties.getFile().getUploadDir()).toAbsolutePath().toString();

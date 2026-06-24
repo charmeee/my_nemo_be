@@ -11,6 +11,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final RateLimitInterceptor rateLimitInterceptor;
 
+    // Rate Limit 인터셉터를 주요 API 경로에 등록 (공개 invite info는 제외)
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(rateLimitInterceptor)

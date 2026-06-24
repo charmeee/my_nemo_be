@@ -25,6 +25,7 @@ public class GuestSessionController {
     private final InviteLinkRepository inviteLinkRepository;
     private final JwtTokenService jwtTokenService;
 
+    // 초대 코드로 24h 읽기 전용 게스트 토큰 발급
     @PostMapping("/invite/{code}/guest-session")
     public ResponseEntity<ApiResponse<Map<String, String>>> getGuestSession(
             @PathVariable String code) {
