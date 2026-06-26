@@ -45,10 +45,9 @@ public class SessionGuard {
     private void sendForceClose(WebSocketSession session, String reason) {
         try {
             Map<String, Object> msg = Map.of("type", "force-close", "reason", reason);
-            synchronized (session) {
-                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(msg)));
-                session.close(CloseStatus.POLICY_VIOLATION);
-            }
+            // session은 RoomManager의 decorated 세션이라 송신이 자동 직렬화된다.
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(msg)));
+            session.close(CloseStatus.POLICY_VIOLATION);
         } catch (Exception ignored) {}
     }
 }

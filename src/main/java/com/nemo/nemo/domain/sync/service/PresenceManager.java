@@ -43,9 +43,8 @@ public class PresenceManager {
         for (WebSocketSession session : sessions) {
             if (session.isOpen() && !session.getId().equals(senderSessionId)) {
                 try {
-                    synchronized (session) {
-                        session.sendMessage(textMsg);
-                    }
+                    // sessions는 RoomManager의 decorated 세션이라 송신이 자동 직렬화된다.
+                    session.sendMessage(textMsg);
                 } catch (Exception ignored) {}
             }
         }

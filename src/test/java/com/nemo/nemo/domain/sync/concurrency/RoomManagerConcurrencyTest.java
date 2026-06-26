@@ -7,15 +7,24 @@ import org.springframework.web.socket.WebSocketSession;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DisplayName("RoomManager - 동시성 테스트")
 class RoomManagerConcurrencyTest {
+
+    // RoomManager가 session.getId()를 decorator 키로 사용하므로 mock에 stable id를 부여한다.
+    private static WebSocketSession mockSession() {
+        WebSocketSession session = mock(WebSocketSession.class);
+        when(session.getId()).thenReturn(UUID.randomUUID().toString());
+        return session;
+    }
 
     @Test
     @DisplayName("50개 세션 동시 join - 모두 등록")
@@ -24,7 +33,7 @@ class RoomManagerConcurrencyTest {
         int sessionCount = 50;
         List<WebSocketSession> sessions = new ArrayList<>();
         for (int i = 0; i < sessionCount; i++) {
-            sessions.add(mock(WebSocketSession.class));
+            sessions.add(mockSession());
         }
 
         CountDownLatch latch = new CountDownLatch(sessionCount);
@@ -53,7 +62,7 @@ class RoomManagerConcurrencyTest {
         int count = 30;
         List<WebSocketSession> sessions = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            sessions.add(mock(WebSocketSession.class));
+            sessions.add(mockSession());
         }
 
         // 먼저 모두 join
@@ -86,7 +95,7 @@ class RoomManagerConcurrencyTest {
     @DisplayName("마지막 세션 leave 시 방 자동 제거")
     void 마지막_leave_방제거() {
         RoomManager roomManager = new RoomManager();
-        WebSocketSession session = mock(WebSocketSession.class);
+        WebSocketSession session = mockSession();
 
         roomManager.join("album-1", session);
         assertThat(roomManager.isEmpty("album-1")).isFalse();

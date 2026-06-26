@@ -484,15 +484,15 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
     private void sendJson(WebSocketSession session, Object obj) {
         try {
             String payload = objectMapper.writeValueAsString(obj);
-            synchronized (session) {
-                session.sendMessage(new TextMessage(payload));
-            }
+            // ConcurrentWebSocketSessionDecorator가 송신을 내부 큐로 직렬화한다.
+            roomManager.decorate(session).sendMessage(new TextMessage(payload));
         } catch (Exception e) {
             log.warn("[Excalidraw] send failed: {}", e.getMessage());
         }
     }
 
-    // sender를 제외한 같은 방의 모든 세션에 메시지 전송 (세션별 sendMessage 동기화 필수)
+    // sender를 제외한 같은 방의 모든 세션에 메시지 전송
+    // (roomManager.getSessions가 decorator를 반환하므로 별도 동기화 불필요)
     private void broadcast(String albumId, WebSocketSession sender, Object msg) {
         String payload;
         try {
@@ -503,7 +503,7 @@ public class ExcalidrawSyncHandler extends TextWebSocketHandler {
         roomManager.getSessions(albumId).forEach(s -> {
             if (s.isOpen() && !s.getId().equals(sender.getId())) {
                 try {
-                    synchronized (s) { s.sendMessage(new TextMessage(payload)); }
+                    s.sendMessage(new TextMessage(payload));
                 } catch (Exception ignored) {}
             }
         });

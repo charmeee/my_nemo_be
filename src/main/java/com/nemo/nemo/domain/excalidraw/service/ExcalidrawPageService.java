@@ -200,7 +200,7 @@ public class ExcalidrawPageService {
             roomManager.getSessions(albumId).forEach(session -> {
                 if (session.isOpen()) {
                     try {
-                        synchronized (session) { session.sendMessage(new TextMessage(payload)); }
+                        session.sendMessage(new TextMessage(payload));
                     } catch (Exception ignored) {}
                 }
             });
