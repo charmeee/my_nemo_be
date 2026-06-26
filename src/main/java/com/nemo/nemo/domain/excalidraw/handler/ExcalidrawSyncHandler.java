@@ -40,9 +40,24 @@ import java.util.concurrent.atomic.AtomicInteger;
  * URI: /sync/excalidraw/{albumId}
  *
  * 프로토콜:
- *  Client → Server: connect | push | presence | ping | excalidraw_file
- *  Server → Client: connected | patch | push_result | pong | page_event | error | force-close
- *                 | user_joined | user_left | excalidraw_file
+ *  Client → Server
+ *    - connect         : JWT 토큰 + lastClockByPage 전송, 인증 후 hydration 요청
+ *    - push            : 그림 변경분(elements) 전송 → 서버 LWW merge
+ *    - presence        : 커서/선택 영역 등 휘발성 상태 송신 (저장 안 함)
+ *    - ping            : keep-alive 요청 (서버는 pong 회신)
+ *    - excalidraw_file : 이미지 업로드 완료 알림 (fileId, url 공유)
+ *
+ *  Server → Client
+ *    - connected       : connect 응답, full/delta hydration + roomMembers + files
+ *    - patch           : 다른 세션의 push 결과를 diff 형태로 브로드캐스트
+ *    - push_result     : push 발신자에게 commit/rebase 결과 + 새 serverClock 회신
+ *    - pong            : ping 응답 + 30초 주기 keep-alive
+ *    - page_event      : 페이지 추가/삭제/이름변경 알림 (REST 측에서 트리거)
+ *    - error           : auth-required, album-locked, rate-limit-exceeded 등 에러
+ *    - force-close     : SessionGuard 가 강제 종료 직전 사유 전달
+ *    - user_joined     : 새 세션 입장 시 룸 내 다른 세션에 통지
+ *    - user_left       : 세션 종료 시 룸 내 다른 세션에 통지
+ *    - excalidraw_file : 클라가 보낸 fileId/url 매핑을 룸에 그대로 브로드캐스트
  */
 @Slf4j
 @Component
