@@ -10,6 +10,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * presence(커서/선택영역) 메시지를 앨범 룸 내 다른 세션들에 브로드캐스트.
+ * - 발신자 세션은 제외하고 전송
+ * - 페이로드에 pageId를 포함시켜 페이지 필터링은 클라이언트가 담당
+ * - 직렬화/전송 예외는 무시(presence는 손실 허용 데이터)
+ */
 @Component
 @RequiredArgsConstructor
 public class PresenceManager {

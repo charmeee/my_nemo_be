@@ -24,7 +24,7 @@ class ClockManagerConcurrencyTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    clockManager.increment("album-1");
+                    clockManager.increment("page-1");
                 } finally {
                     latch.countDown();
                 }
@@ -34,12 +34,12 @@ class ClockManagerConcurrencyTest {
         latch.await();
         executor.shutdown();
 
-        assertThat(clockManager.get("album-1")).isEqualTo(100L);
+        assertThat(clockManager.get("page-1")).isEqualTo(100L);
     }
 
     @Test
-    @DisplayName("여러 앨범 동시 increment - 각 앨범별 독립성 보장")
-    void 여러_앨범_동시_increment() throws InterruptedException {
+    @DisplayName("여러 페이지 동시 increment - 각 페이지별 독립성 보장")
+    void 여러_페이지_동시_increment() throws InterruptedException {
         ClockManager clockManager = new ClockManager();
         int threadCount = 50;
         CountDownLatch latch = new CountDownLatch(threadCount * 2);
@@ -48,14 +48,14 @@ class ClockManagerConcurrencyTest {
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    clockManager.increment("album-A");
+                    clockManager.increment("page-A");
                 } finally {
                     latch.countDown();
                 }
             });
             executor.submit(() -> {
                 try {
-                    clockManager.increment("album-B");
+                    clockManager.increment("page-B");
                 } finally {
                     latch.countDown();
                 }
@@ -65,7 +65,7 @@ class ClockManagerConcurrencyTest {
         latch.await();
         executor.shutdown();
 
-        assertThat(clockManager.get("album-A")).isEqualTo(50L);
-        assertThat(clockManager.get("album-B")).isEqualTo(50L);
+        assertThat(clockManager.get("page-A")).isEqualTo(50L);
+        assertThat(clockManager.get("page-B")).isEqualTo(50L);
     }
 }

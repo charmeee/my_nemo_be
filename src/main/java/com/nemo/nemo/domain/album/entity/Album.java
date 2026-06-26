@@ -34,7 +34,7 @@ public class Album {
 
     private LocalDateTime deletedAt;
 
-    @PrePersist
+     @PrePersist
     private void prePersist() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();

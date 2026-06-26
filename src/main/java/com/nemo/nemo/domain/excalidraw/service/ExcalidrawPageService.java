@@ -71,16 +71,18 @@ public class ExcalidrawPageService {
         if (count >= MAX_PAGES) {
             throw new NemoException(ErrorCode.ALBUM_PAGE_LIMIT_EXCEEDED);
         }
-
+        // 앨범 조회
         Album album = albumRepository.findById(albumId)
                 .filter(a -> a.getDeletedAt() == null)
                 .orElseThrow(() -> new NemoException(ErrorCode.ALBUM_NOT_FOUND));
 
         int order = (int) count;
         String name = req.name() != null && !req.name().isBlank() ? req.name() : "페이지 " + (order + 1);
+        //페이지 생성
         ExcalidrawPage page = ExcalidrawPage.create(album, name, order);
         pageRepository.save(page);
 
+        // 생성 브로드캐스트
         broadcastPageEvent(albumId.toString(), "added", page.getPageId().toString(), name, order);
 
         // N-NOTIF-05: 새 페이지 추가 알림 — 모든 active 멤버에게 전송

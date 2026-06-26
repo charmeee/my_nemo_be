@@ -40,8 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * URI: /sync/excalidraw/{albumId}
  *
  * 프로토콜:
- *  Client → Server: connect | push | presence | ping
+ *  Client → Server: connect | push | presence | ping | excalidraw_file
  *  Server → Client: connected | patch | push_result | pong | page_event | error | force-close
+ *                 | user_joined | user_left | excalidraw_file
  */
 @Slf4j
 @Component

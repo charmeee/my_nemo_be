@@ -70,6 +70,7 @@ public class PageDocumentStore {
     public String applyAndStore(String pageId, String mergedElementsJson, long serverClock) {
         pageStates.put(pageId, mergedElementsJson);
         redis.opsForValue().set(REDIS_KEY_PREFIX + pageId, mergedElementsJson);
+        // 메모리와 redis는 강일관성을 가지고 있음
         resetFlushTimer(pageId);
         return mergedElementsJson;
     }

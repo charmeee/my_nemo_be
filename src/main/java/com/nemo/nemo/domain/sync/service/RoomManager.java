@@ -6,6 +6,12 @@ import org.springframework.web.socket.WebSocketSession;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 앨범(룸) 단위 WebSocket 세션 보관소.
+ * - key: albumId, value: 해당 앨범에 접속 중인 세션 집합
+ * - 세션이 모두 빠지면 룸 자체를 제거(메모리 누수 방지)
+ * - 한 유저가 여러 탭/디바이스로 접속 시 같은 룸에 세션이 여러 개 존재
+ */
 @Component
 public class RoomManager {
 

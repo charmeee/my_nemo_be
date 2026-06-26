@@ -10,6 +10,12 @@ import org.springframework.web.socket.WebSocketSession;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * WebSocket 세션 강제 종료기.
+ * - forceClose: 특정 유저의 세션만 끊기(권한 박탈, 멤버 추방 시)
+ * - forceCloseAll: 룸 전체 끊기(앨범 삭제, 잠금 시)
+ * - 종료 전에 force-close 메시지로 사유 전달 후 POLICY_VIOLATION으로 close
+ */
 @Component
 @RequiredArgsConstructor
 public class SessionGuard {
