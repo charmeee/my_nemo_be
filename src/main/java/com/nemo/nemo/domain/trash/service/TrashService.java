@@ -14,8 +14,6 @@ import com.nemo.nemo.domain.member.entity.Member;
 import com.nemo.nemo.domain.member.repository.MemberRepository;
 import com.nemo.nemo.domain.excalidraw.entity.ExcalidrawPage;
 import com.nemo.nemo.domain.excalidraw.repository.ExcalidrawPageRepository;
-import com.nemo.nemo.domain.page.entity.AlbumPage;
-import com.nemo.nemo.domain.page.repository.AlbumPageRepository;
 import com.nemo.nemo.domain.sync.service.RoomManager;
 import org.springframework.web.socket.TextMessage;
 import com.nemo.nemo.domain.trash.dto.TrashResponse;
@@ -45,7 +43,6 @@ public class TrashService {
     private final AlbumRepository albumRepository;
     private final AlbumMemberRepository albumMemberRepository;
     private final InviteLinkRepository inviteLinkRepository;
-    private final AlbumPageRepository albumPageRepository;
     private final ExcalidrawPageRepository excalidrawPageRepository;
     private final ImageRepository imageRepository;
     private final MemberRepository memberRepository;
@@ -138,13 +135,12 @@ public class TrashService {
             }
             imageRepository.deleteAll(images);
             excalidrawPageRepository.deleteAllByAlbumId(albumId);
-            albumPageRepository.deleteAllByAlbumId(albumId);
             albumMemberRepository.deleteAllByAlbumId(albumId);
             inviteLinkRepository.deleteAllByAlbumId(albumId);
             albumRepository.deleteById(albumId);
         } else if (trash.getType() == TrashType.PAGE) {
-            albumPageRepository.findById(trash.getReferenceId())
-                    .ifPresent(albumPageRepository::delete);
+            excalidrawPageRepository.findById(trash.getReferenceId())
+                    .ifPresent(excalidrawPageRepository::delete);
         }
 
         trashRepository.delete(trash);
