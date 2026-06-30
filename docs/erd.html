@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Nemo ERD</title>
+<style>
+  :root {
+    --bg: #f1f5f9;
+    --bg-soft: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --muted-2: #94a3b8;
+
+    /* domain colors */
+    --c-user: #6366f1;       /* indigo */
+    --c-user-bg: #eef2ff;
+    --c-album: #f59e0b;      /* amber */
+    --c-album-bg: #fef3c7;
+    --c-content: #10b981;    /* emerald */
+    --c-content-bg: #d1fae5;
+    --c-social: #ec4899;     /* pink */
+    --c-social-bg: #fce7f3;
+    --c-system: #0ea5e9;     /* sky */
+    --c-system-bg: #e0f2fe;
+    --c-legacy: #94a3b8;     /* slate */
+    --c-legacy-bg: #f1f5f9;
+
+    /* key colors */
+    --pk: #f59e0b;
+    --pk-bg: #fef3c7;
+    --fk: #6366f1;
+    --fk-bg: #eef2ff;
+    --uq: #10b981;
+    --uq-bg: #d1fae5;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); }
+  body {
+    margin: 0;
+    padding: 40px 24px 96px;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+    color: var(--text);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1280px; margin: 0 auto; }
+
+  /* ── Header ──────────────────────────────── */
+  header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 32px 36px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 30px -10px rgba(15,23,42,0.4);
+  }
+  header h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.02em; font-weight: 700; }
+  header .subtitle { color: #cbd5e1; font-size: 14px; }
+  header .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+  header .legend span {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #e2e8f0;
+    padding: 6px 12px; border-radius: 999px; font-size: 12px;
+  }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .swatch.user { background: var(--c-user); }
+  .swatch.album { background: var(--c-album); }
+  .swatch.content { background: var(--c-content); }
+  .swatch.social { background: var(--c-social); }
+  .swatch.system { background: var(--c-system); }
+  .swatch.legacy { background: var(--c-legacy); }
+
+  /* ── Section ──────────────────────────────── */
+  section { margin-bottom: 40px; }
+  h2 {
+    font-size: 18px; font-weight: 700; margin: 0 0 16px;
+    letter-spacing: -0.01em; color: var(--text);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2::before {
+    content: ""; width: 4px; height: 18px; border-radius: 2px;
+    background: linear-gradient(180deg, #6366f1, #ec4899);
+  }
+
+  /* ── Entity grid ──────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .entity {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 4px 12px -6px rgba(15,23,42,0.06);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    display: flex; flex-direction: column;
+  }
+  .entity:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(15,23,42,0.06), 0 18px 28px -16px rgba(15,23,42,0.18);
+  }
+
+  .e-head {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .e-name {
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+    font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .e-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.65); border: 1px solid rgba(15,23,42,0.06);
+  }
+  .e-user .e-head { background: var(--c-user-bg); }
+  .e-user .e-name, .e-user .e-tag { color: var(--c-user); }
+  .e-album .e-head { background: var(--c-album-bg); }
+  .e-album .e-name, .e-album .e-tag { color: #b45309; }
+  .e-content .e-head { background: var(--c-content-bg); }
+  .e-content .e-name, .e-content .e-tag { color: #047857; }
+  .e-social .e-head { background: var(--c-social-bg); }
+  .e-social .e-name, .e-social .e-tag { color: #be185d; }
+  .e-system .e-head { background: var(--c-system-bg); }
+  .e-system .e-name, .e-system .e-tag { color: #0369a1; }
+  .e-legacy .e-head { background: var(--c-legacy-bg); }
+  .e-legacy .e-name, .e-legacy .e-tag { color: #475569; }
+  .e-legacy { opacity: 0.92; border-style: dashed; }
+
+  .e-rows {
+    display: flex; flex-direction: column;
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+  .e-row {
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    gap: 8px; align-items: center;
+    padding: 8px 12px 8px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    position: relative;
+  }
+  .e-row:last-child { border-bottom: none; }
+
+  /* PK/FK/UQ emphasis */
+  .e-row.pk {
+    background: linear-gradient(90deg, var(--pk-bg) 0%, rgba(254,243,199,0) 65%);
+  }
+  .e-row.fk {
+    background: linear-gradient(90deg, var(--fk-bg) 0%, rgba(238,242,255,0) 65%);
+  }
+  .e-row.uq {
+    background: linear-gradient(90deg, var(--uq-bg) 0%, rgba(209,250,229,0) 65%);
+  }
+  .e-row.pk::before, .e-row.fk::before, .e-row.uq::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  }
+  .e-row.pk::before { background: var(--pk); }
+  .e-row.fk::before { background: var(--fk); }
+  .e-row.uq::before { background: var(--uq); }
+
+  .key-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.05em;
+    padding: 3px 5px; border-radius: 4px; color: #fff;
+    font-family: ui-monospace, monospace;
+    min-width: 28px; height: 18px;
+    text-align: center;
+  }
+  .key-badge.pk { background: var(--pk); }
+  .key-badge.fk { background: var(--fk); }
+  .key-badge.uq { background: var(--uq); }
+  .key-badge.pkfk {
+    background: linear-gradient(90deg, var(--pk) 0 50%, var(--fk) 50% 100%);
+    min-width: 42px;
+  }
+  .key-badge.none {
+    background: transparent; color: var(--muted-2);
+    border: 1px dashed var(--border); font-weight: 600;
+  }
+
+  .e-row .col {
+    color: var(--text); font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .e-row.pk .col { font-weight: 800; color: #92400e; }
+  .e-row.fk .col { color: #3730a3; }
+  .e-row.fk .ref {
+    color: var(--fk); font-weight: 600; opacity: 0.85;
+  }
+  .e-row .type {
+    color: var(--muted); font-size: 11px; font-weight: 500;
+    font-family: ui-monospace, monospace;
+  }
+  .e-foot {
+    padding: 10px 14px;
+    background: var(--bg-soft);
+    border-top: 1px solid var(--border);
+    font-size: 11.5px; color: var(--muted); line-height: 1.45;
+    font-family: 'Pretendard', sans-serif;
+  }
+
+  /* ── Panel ──────────────────────────────── */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 4px 12px -6px rgba(15,23,42,0.06);
+    overflow-x: auto;
+  }
+
+  /* ── ERD SVG ──────────────────────────────── */
+  .erd-wrap {
+    background: repeating-linear-gradient(
+      0deg, transparent 0 39px, rgba(148,163,184,0.10) 39px 40px),
+    repeating-linear-gradient(
+      90deg, transparent 0 39px, rgba(148,163,184,0.10) 39px 40px);
+    background-color: #fcfdfe;
+    border-radius: 10px;
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .erd-svg {
+    display: block;
+    min-width: 1020px;
+  }
+  .erd-legend {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    margin-top: 16px;
+    font-size: 12px; color: var(--muted);
+  }
+  .erd-legend .lg {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fff; border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 8px;
+  }
+  .erd-legend svg { display: inline-block; }
+
+  /* ── Relationship table ──────────────────────────────── */
+  .rel-table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-size: 13px;
+  }
+  .rel-table th, .rel-table td {
+    padding: 10px 14px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .rel-table th {
+    background: var(--bg-soft); color: var(--muted);
+    font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .rel-table td.tbl {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+  }
+  .rel-arrow {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    background: #eef2ff; color: #4f46e5;
+    font-family: ui-monospace, monospace;
+    font-size: 11px; font-weight: 700;
+  }
+
+  /* ── Migration list ──────────────────────────────── */
+  .timeline {
+    display: grid; grid-template-columns: 80px 1fr;
+    row-gap: 14px; column-gap: 18px;
+  }
+  .timeline .v {
+    font-family: ui-monospace, monospace; font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    padding: 6px 12px; border-radius: 8px; text-align: center;
+    height: fit-content; font-size: 13px;
+  }
+  .timeline .desc { align-self: center; font-size: 13.5px; color: var(--text); }
+  .timeline .desc b { color: var(--c-user); }
+
+  footer {
+    text-align: center; color: var(--muted); font-size: 12px;
+    margin-top: 56px;
+  }
+  footer code {
+    background: #fff; border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Nemo Database ERD</h1>
+    <div class="subtitle">PostgreSQL · Flyway V1 ~ V6 · 협업 앨범 / Excalidraw 실시간 동기화 / 초대 / 알림 / 휴지통</div>
+    <div class="legend">
+      <span><i class="swatch user"></i> 인증 · 회원</span>
+      <span><i class="swatch album"></i> 앨범 · 권한</span>
+      <span><i class="swatch content"></i> 콘텐츠</span>
+      <span><i class="swatch social"></i> 초대 · 알림</span>
+      <span><i class="swatch system"></i> 휴지통</span>
+      <span><i class="swatch legacy"></i> Legacy (TLDraw)</span>
+    </div>
+  </header>
+
+  <!-- ──────────── Entity cards ──────────── -->
+  <section>
+    <h2>엔티티</h2>
+    <div class="grid">
+
+      <!-- USERS -->
+      <div class="entity e-user">
+        <div class="e-head"><div class="e-name">users</div><div class="e-tag">User</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row uq"><span class="key-badge uq">UQ</span><span class="col">email</span><span class="type">varchar(255)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">nickname</span><span class="type">varchar(100)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">profile_image</span><span class="type">varchar(500)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">password_hash</span><span class="type">varchar(255)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">계정 (이메일 + 소셜 통합). password_hash는 V4 추가.</div>
+      </div>
+
+      <!-- MEMBER_OAUTH -->
+      <div class="entity e-user">
+        <div class="e-head"><div class="e-name">member_oauth</div><div class="e-tag">User</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">member_id <span class="ref">→ users</span></span><span class="type">uuid</span></div>
+          <div class="e-row uq"><span class="key-badge uq">UQ</span><span class="col">provider</span><span class="type">varchar(20)</span></div>
+          <div class="e-row uq"><span class="key-badge uq">UQ</span><span class="col">provider_id</span><span class="type">varchar(255)</span></div>
+        </div>
+        <div class="e-foot">OAuth 멀티 프로바이더 (provider + provider_id UNIQUE).</div>
+      </div>
+
+      <!-- ALBUMS -->
+      <div class="entity e-album">
+        <div class="e-head"><div class="e-name">albums</div><div class="e-tag">Album</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">name</span><span class="type">varchar(30)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">cover_image</span><span class="type">varchar(500)</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">creator_id <span class="ref">→ users</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">is_locked</span><span class="type">boolean</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">updated_at</span><span class="type">timestamp</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">deleted_at</span><span class="type">timestamp ?</span></div>
+        </div>
+        <div class="e-foot">소프트 삭제 (deleted_at). is_locked는 편집 잠금.</div>
+      </div>
+
+      <!-- ALBUM_MEMBERS -->
+      <div class="entity e-album">
+        <div class="e-head"><div class="e-name">album_members</div><div class="e-tag">Album</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">album_id <span class="ref">→ albums</span></span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">user_id <span class="ref">→ users</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">role</span><span class="type">ADMIN | EDITOR | VIEWER</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">status</span><span class="type">PENDING | ACTIVE | REJECTED</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">joined_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">N:N 조인. UNIQUE(album_id, user_id).</div>
+      </div>
+
+      <!-- EXCALIDRAW_PAGES -->
+      <div class="entity e-content">
+        <div class="e-head"><div class="e-name">excalidraw_pages</div><div class="e-tag">Content</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">page_id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">album_id <span class="ref">→ albums</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">name</span><span class="type">varchar(100)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">page_order</span><span class="type">int</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">elements</span><span class="type">text (json)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">server_clock</span><span class="type">bigint</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">updated_at</span><span class="type">timestamp</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">deleted_at</span><span class="type">timestamp ?</span></div>
+        </div>
+        <div class="e-foot">LWW 동기화 (server_clock). V5 추가.</div>
+      </div>
+
+      <!-- IMAGES -->
+      <div class="entity e-content">
+        <div class="e-head"><div class="e-name">images</div><div class="e-tag">Content</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">album_id <span class="ref">→ albums</span></span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">uploader_id <span class="ref">→ users</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">file_path</span><span class="type">varchar(500)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">url</span><span class="type">varchar(500)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">size</span><span class="type">bigint</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">mime_type</span><span class="type">varchar(100)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">excalidraw_file_id</span><span class="type">varchar(64)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">로컬 파일 참조. excalidraw_file_id는 V6 (SHA-1 매핑).</div>
+      </div>
+
+      <!-- INVITE_LINKS -->
+      <div class="entity e-social">
+        <div class="e-head"><div class="e-name">invite_links</div><div class="e-tag">Social</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">album_id <span class="ref">→ albums</span></span><span class="type">uuid</span></div>
+          <div class="e-row uq"><span class="key-badge uq">UQ</span><span class="col">code</span><span class="type">varchar(32)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">role</span><span class="type">EDITOR | VIEWER</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">approval_required</span><span class="type">boolean</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">is_active</span><span class="type">boolean</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">code UNIQUE. 승인 필요 시 album_members.status = PENDING.</div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="entity e-social">
+        <div class="e-head"><div class="e-name">notifications</div><div class="e-tag">Social</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">user_id <span class="ref">→ users</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">type</span><span class="type">varchar(50)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">payload</span><span class="type">text (json)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">is_read</span><span class="type">boolean</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">SSE + Redis Pub/Sub 멀티 인스턴스 fan-out.</div>
+      </div>
+
+      <!-- TRASH -->
+      <div class="entity e-system">
+        <div class="e-head"><div class="e-name">trash</div><div class="e-tag">System</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">id</span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">type</span><span class="type">ALBUM | PAGE</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">reference_id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">deleted_by_id <span class="ref">→ users</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">original_data</span><span class="type">text (json)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">expires_at</span><span class="type">timestamp</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">expires_at 후 영구 삭제. 복원 시 original_data 재구성.</div>
+      </div>
+
+      <!-- ALBUM_PAGES (legacy) -->
+      <div class="entity e-legacy">
+        <div class="e-head"><div class="e-name">album_pages</div><div class="e-tag">Legacy</div></div>
+        <div class="e-rows">
+          <div class="e-row pk"><span class="key-badge pk">PK</span><span class="col">tl_page_id</span><span class="type">uuid</span></div>
+          <div class="e-row fk"><span class="key-badge fk">FK</span><span class="col">album_id <span class="ref">→ albums</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">thumbnail_url</span><span class="type">varchar(500)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">created_at</span><span class="type">timestamp</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">deleted_at</span><span class="type">timestamp ?</span></div>
+        </div>
+        <div class="e-foot">TLDraw 시절 페이지 메타. V5 이후 신규 앨범 미사용.</div>
+      </div>
+
+      <!-- TLDRAW_DOCUMENTS (legacy) -->
+      <div class="entity e-legacy">
+        <div class="e-head"><div class="e-name">tldraw_documents</div><div class="e-tag">Legacy</div></div>
+        <div class="e-rows">
+          <div class="e-row pk fk"><span class="key-badge pkfk">PK·FK</span><span class="col">album_id <span class="ref">→ albums</span></span><span class="type">uuid</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">state</span><span class="type">text (json)</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">server_clock</span><span class="type">bigint</span></div>
+          <div class="e-row"><span class="key-badge none">·</span><span class="col">updated_at</span><span class="type">timestamp</span></div>
+        </div>
+        <div class="e-foot">TLDraw 문서 상태 (앨범 1:1). V5 이후 미사용.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ──────────── ERD Diagram (custom SVG) ──────────── -->
+  <section>
+    <h2>관계도</h2>
+    <div class="panel">
+      <div class="erd-wrap">
+        <svg class="erd-svg" viewBox="0 0 1020 540" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <!-- crow's foot markers -->
+            <marker id="end-N" viewBox="-14 -8 14 16" refX="0" refY="0"
+                    markerWidth="14" markerHeight="16" orient="auto">
+              <path d="M 0 0 L -12 -6 M 0 0 L -12 0 M 0 0 L -12 6"
+                    stroke="#475569" fill="none" stroke-width="1.4" stroke-linecap="round"/>
+            </marker>
+            <marker id="end-1" viewBox="-12 -8 12 16" refX="0" refY="0"
+                    markerWidth="12" markerHeight="16" orient="auto">
+              <line x1="-5" y1="-6" x2="-5" y2="6" stroke="#475569" stroke-width="1.8" stroke-linecap="round"/>
+            </marker>
+            <marker id="start-N" viewBox="0 -8 14 16" refX="0" refY="0"
+                    markerWidth="14" markerHeight="16" orient="auto">
+              <path d="M 0 0 L 12 -6 M 0 0 L 12 0 M 0 0 L 12 6"
+                    stroke="#475569" fill="none" stroke-width="1.4" stroke-linecap="round"/>
+            </marker>
+            <marker id="start-1" viewBox="0 -8 12 16" refX="0" refY="0"
+                    markerWidth="12" markerHeight="16" orient="auto">
+              <line x1="5" y1="-6" x2="5" y2="6" stroke="#475569" stroke-width="1.8" stroke-linecap="round"/>
+            </marker>
+
+            <!-- box drop shadow -->
+            <filter id="box-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.10"/>
+            </filter>
+          </defs>
+
+          <!-- Connection lines (orthogonal) -->
+          <g stroke="#64748b" stroke-width="1.4" fill="none" stroke-linecap="round">
+            <!-- 1. users(1) ── member_oauth(N) -->
+            <path d="M 220 185 L 180 185"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 2. users(1) ── album_members(N) -->
+            <path d="M 380 185 L 420 185"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 3. users(1) ── albums(N) creator (top arch) -->
+            <path d="M 280 160 V 110 H 660 V 160"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 4. users(1) ── notifications(N) -->
+            <path d="M 240 210 V 290 H 100 V 320"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 5. users(1) ── trash(N) -->
+            <path d="M 300 210 V 320"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 6. users(1) ── images(N) uploader -->
+            <path d="M 360 210 V 280 H 660 V 320"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 7. album_members(N) ── albums(1) -->
+            <path d="M 580 185 L 620 185"
+                  marker-start="url(#start-N)" marker-end="url(#end-1)"/>
+            <!-- 8. albums(1) ── excalidraw_pages(N) -->
+            <path d="M 780 185 L 820 185"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 9. albums(1) ── invite_links(N) -->
+            <path d="M 700 160 V 70"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+            <!-- 10. albums(1) ── images(N) -->
+            <path d="M 740 210 V 320"
+                  marker-start="url(#start-1)" marker-end="url(#end-N)"/>
+          </g>
+
+          <!-- Cardinality labels (subtle) -->
+          <g font-family="ui-monospace, monospace" font-size="10" font-weight="700" fill="#64748b">
+            <!-- 1 ── N labels near endpoints -->
+            <text x="206" y="178">1</text> <text x="190" y="178">N</text>
+            <text x="390" y="178">1</text> <text x="408" y="178">N</text>
+            <text x="290" y="148">1</text> <text x="666" y="148">N</text>
+            <text x="252" y="222">1</text> <text x="86" y="316">N</text>
+            <text x="310" y="222">1</text> <text x="310" y="316">N</text>
+            <text x="372" y="222">1</text> <text x="666" y="316">N</text>
+            <text x="588" y="178">N</text> <text x="606" y="178">1</text>
+            <text x="790" y="178">1</text> <text x="808" y="178">N</text>
+            <text x="708" y="150">1</text> <text x="708" y="82">N</text>
+            <text x="748" y="222">1</text> <text x="748" y="316">N</text>
+          </g>
+
+          <!-- Entity boxes -->
+          <g filter="url(#box-shadow)">
+
+            <!-- invite_links -->
+            <g transform="translate(620, 20)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#ec4899"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">invite_links</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK id · FK album_id</text>
+            </g>
+
+            <!-- member_oauth -->
+            <g transform="translate(20, 160)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#6366f1"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">member_oauth</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK id · FK member_id</text>
+            </g>
+
+            <!-- users (hub) -->
+            <g transform="translate(220, 160)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+              <rect width="6" height="50" rx="3" fill="#6366f1"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="14" font-weight="800" fill="#3730a3">users</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK id · UQ email</text>
+            </g>
+
+            <!-- album_members -->
+            <g transform="translate(420, 160)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#f59e0b"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">album_members</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">FK album_id · FK user_id</text>
+            </g>
+
+            <!-- albums (hub) -->
+            <g transform="translate(620, 160)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#f59e0b" stroke-width="2"/>
+              <rect width="6" height="50" rx="3" fill="#f59e0b"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="14" font-weight="800" fill="#b45309">albums</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK id · FK creator_id</text>
+            </g>
+
+            <!-- excalidraw_pages -->
+            <g transform="translate(820, 160)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#10b981"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">excalidraw_pages</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK page_id · FK album_id</text>
+            </g>
+
+            <!-- notifications -->
+            <g transform="translate(20, 320)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#ec4899"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">notifications</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK id · FK user_id</text>
+            </g>
+
+            <!-- trash -->
+            <g transform="translate(220, 320)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#0ea5e9"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">trash</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK id · FK deleted_by_id</text>
+            </g>
+
+            <!-- images -->
+            <g transform="translate(620, 320)">
+              <rect width="160" height="50" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.2"/>
+              <rect width="6" height="50" rx="3" fill="#10b981"/>
+              <text x="86" y="24" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#0f172a">images</text>
+              <text x="86" y="40" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">FK album_id · FK uploader_id</text>
+            </g>
+
+          </g>
+
+          <!-- Legacy group (no connection lines, separate panel) -->
+          <g transform="translate(20, 450)">
+            <rect width="980" height="80" rx="10" fill="#fff" stroke="#cbd5e1" stroke-dasharray="4 3" stroke-width="1"/>
+            <text x="18" y="22" font-family="'Pretendard',sans-serif" font-size="11" font-weight="700" fill="#64748b" letter-spacing="0.06em">LEGACY · TLDRAW (V5 이후 신규 앨범 미사용)</text>
+
+            <!-- album_pages -->
+            <g transform="translate(20, 30)" filter="url(#box-shadow)">
+              <rect width="200" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 2" stroke-width="1"/>
+              <rect width="5" height="40" rx="2" fill="#94a3b8"/>
+              <text x="106" y="18" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="700" fill="#475569">album_pages</text>
+              <text x="106" y="32" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK tl_page_id · FK album_id</text>
+            </g>
+
+            <!-- tldraw_documents -->
+            <g transform="translate(240, 30)" filter="url(#box-shadow)">
+              <rect width="220" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3 2" stroke-width="1"/>
+              <rect width="5" height="40" rx="2" fill="#94a3b8"/>
+              <text x="116" y="18" text-anchor="middle"
+                    font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="700" fill="#475569">tldraw_documents</text>
+              <text x="116" y="32" text-anchor="middle"
+                    font-family="'Pretendard',sans-serif" font-size="10" fill="#94a3b8">PK · FK album_id (1:1)</text>
+            </g>
+          </g>
+
+        </svg>
+      </div>
+
+      <div class="erd-legend">
+        <span class="lg">
+          <svg width="34" height="14" viewBox="0 0 34 14">
+            <line x1="2" y1="7" x2="32" y2="7" stroke="#64748b" stroke-width="1.5"/>
+            <line x1="8" y1="2" x2="8" y2="12" stroke="#475569" stroke-width="2"/>
+          </svg>
+          1 (one)
+        </span>
+        <span class="lg">
+          <svg width="34" height="14" viewBox="0 0 34 14">
+            <line x1="2" y1="7" x2="32" y2="7" stroke="#64748b" stroke-width="1.5"/>
+            <path d="M 8 7 L 20 2 M 8 7 L 20 7 M 8 7 L 20 12" stroke="#475569" stroke-width="1.5" fill="none"/>
+          </svg>
+          N (many)
+        </span>
+        <span class="lg"><span class="key-badge pk" style="font-size:9px">PK</span> Primary Key</span>
+        <span class="lg"><span class="key-badge fk" style="font-size:9px">FK</span> Foreign Key</span>
+        <span class="lg"><span class="key-badge uq" style="font-size:9px">UQ</span> Unique</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────── Relationship table ──────────── -->
+  <section>
+    <h2>관계 요약</h2>
+    <div class="panel" style="padding: 0;">
+      <table class="rel-table">
+        <thead>
+          <tr><th>FROM</th><th>관계</th><th>TO</th><th>의미</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="tbl">users</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">member_oauth</td><td>한 계정에 여러 소셜 프로바이더</td></tr>
+          <tr><td class="tbl">users</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">albums (creator)</td><td>앨범 소유자</td></tr>
+          <tr><td class="tbl">users</td><td><span class="rel-arrow">N ─ N</span></td><td class="tbl">albums (via album_members)</td><td>역할 = ADMIN / EDITOR / VIEWER</td></tr>
+          <tr><td class="tbl">albums</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">excalidraw_pages</td><td>page_order 정렬, server_clock LWW</td></tr>
+          <tr><td class="tbl">albums</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">images</td><td>excalidraw_file_id 로 캔버스 역매핑 (V6)</td></tr>
+          <tr><td class="tbl">albums</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">invite_links</td><td>코드 1개 = 역할 1개</td></tr>
+          <tr><td class="tbl">users</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">notifications</td><td>SSE + Redis Pub/Sub</td></tr>
+          <tr><td class="tbl">users</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">trash</td><td>expires_at 후 영구 삭제</td></tr>
+          <tr><td class="tbl">albums</td><td><span class="rel-arrow">1 ─ 1</span></td><td class="tbl">tldraw_documents (legacy)</td><td>V5 이후 신규 생성 X</td></tr>
+          <tr><td class="tbl">albums</td><td><span class="rel-arrow">1 ─ N</span></td><td class="tbl">album_pages (legacy)</td><td>V5 이후 신규 생성 X</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ──────────── Migration timeline ──────────── -->
+  <section>
+    <h2>마이그레이션 히스토리</h2>
+    <div class="panel">
+      <div class="timeline">
+        <div class="v">V1</div>
+        <div class="desc">초기 스키마 — <b>users / albums / album_members / images / notifications / trash / invite_links</b> + TLDraw 테이블 (tldraw_documents / album_pages)</div>
+        <div class="v">V2</div>
+        <div class="desc">enum CHECK 제약 대문자화 — JPA <code>EnumType.STRING</code> 호환 (<b>ADMIN/EDITOR/VIEWER</b> 등)</div>
+        <div class="v">V3</div>
+        <div class="desc"><b>jsonb → text</b> 전환 — Hibernate 7.x String 매핑 호환 (tldraw_documents.state / notifications.payload / trash.original_data)</div>
+        <div class="v">V4</div>
+        <div class="desc"><b>users.password_hash</b> 추가 — 이메일 / 비밀번호 로그인 지원</div>
+        <div class="v">V5</div>
+        <div class="desc"><b>excalidraw_pages</b> 추가 — TLDraw → Excalidraw 마이그레이션 (legacy 테이블은 호환성을 위해 유지)</div>
+        <div class="v">V6</div>
+        <div class="desc"><b>images.excalidraw_file_id</b> 추가 — Excalidraw fileId(SHA-1) ↔ url 역매핑 인덱스 <code>(album_id, excalidraw_file_id)</code></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    nemo-be/docs/erd.html · 출처 <code>nemo-be/src/main/resources/db/migration/V1..V6</code>
+  </footer>
+</div>
+</body>
+</html>
